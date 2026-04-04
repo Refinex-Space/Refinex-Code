@@ -1,3 +1,8 @@
+> Archived: 2026-04-05
+> Source: `docs/superpowers/specs/2026-04-02-cc-global-install-design.md`
+> Reason: migrated into the Harness design archive after verifying the
+> `ccc` global install flow is present in the repository.
+
 # Global `ccc` Install Design
 
 ## Summary

@@ -1,3 +1,12 @@
+> ✅ Completed: 2026-04-05
+> Summary: Verified the global `ccc` launcher implementation and moved
+> the historical execution plan into the Harness completed-plans archive.
+> Duration: historical implementation, verified during Harness bootstrap
+> Key learnings: global launchers must resolve repository-relative scan
+> roots from the entry file location instead of `process.cwd()`
+> Archive note: the checklist below is preserved as-authored; the
+> implementation was re-validated with `bun test src/dev-entry.test.ts`.
+
 # `ccc` Global Install Implementation Plan
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
