@@ -1,0 +1,38 @@
+.DS_Store
+Thumbs.db
+
+# 依赖目录
+node_modules/
+
+# 构建与缓存产物
+dist/
+build/
+coverage/
+.cache/
+.turbo/
+.parcel-cache/
+*.tsbuildinfo
+
+# Bun 历史兼容文件
+bun.lockb
+
+# 日志与临时文件
+*.log
+*.tmp
+*.temp
+*.pid
+*.seed
+*.swp
+*.swo
+
+# 环境变量与本地覆盖配置
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# 本地工具与编辑器状态
+.claude/
+.idea/
+.vscode/
+.history/
