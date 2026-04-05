@@ -30,7 +30,6 @@ import {
   parseEffortValue,
 } from '../utils/effort.js'
 import {
-  getClaudeConfigHomeDir,
   isBareMode,
   isEnvTruthy,
 } from '../utils/envUtils.js'
@@ -56,6 +55,10 @@ import {
 } from '../utils/markdownConfigLoader.js'
 import { parseUserSpecifiedModel } from '../utils/model/model.js'
 import { executeShellCommandsInPrompt } from '../utils/promptShellExecution.js'
+import {
+  getPrimarySkillsPath,
+  getSkillsPaths as resolveSkillsPaths,
+} from '../utils/skillPaths.js'
 import type { SettingSource } from '../utils/settings/constants.js'
 import { isSettingSourceEnabled } from '../utils/settings/constants.js'
 import { getManagedFilePath } from '../utils/settings/managedPath.js'
@@ -79,18 +82,14 @@ export function getSkillsPath(
   source: SettingSource | 'plugin',
   dir: 'skills' | 'commands',
 ): string {
-  switch (source) {
-    case 'policySettings':
-      return join(getManagedFilePath(), '.claude', dir)
-    case 'userSettings':
-      return join(getClaudeConfigHomeDir(), dir)
-    case 'projectSettings':
-      return `.claude/${dir}`
-    case 'plugin':
-      return 'plugin'
-    default:
-      return ''
-  }
+  return getPrimarySkillsPath(source, dir)
+}
+
+export function getSkillsPaths(
+  source: SettingSource | 'plugin',
+  dir: 'skills' | 'commands',
+): string[] {
+  return resolveSkillsPaths(source, dir)
 }
 
 /**
@@ -637,12 +636,12 @@ async function loadSkillsFromCommandsDir(
  */
 export const getSkillDirCommands = memoize(
   async (cwd: string): Promise<Command[]> => {
-    const userSkillsDir = join(getClaudeConfigHomeDir(), 'skills')
     const managedSkillsDir = join(getManagedFilePath(), '.claude', 'skills')
+    const userSkillsDirs = resolveSkillsPaths('userSettings', 'skills')
     const projectSkillsDirs = getProjectDirsUpToHome('skills', cwd)
 
     logForDebugging(
-      `Loading skills from: managed=${managedSkillsDir}, user=${userSkillsDir}, project=[${projectSkillsDirs.join(', ')}]`,
+      `Loading skills from: managed=${managedSkillsDir}, user=[${userSkillsDirs.join(', ')}], project=[${projectSkillsDirs.join(', ')}]`,
     )
 
     // Load from additional directories (--add-dir)
@@ -678,7 +677,7 @@ export const getSkillDirCommands = memoize(
     // (all independent — different directories, no shared state)
     const [
       managedSkills,
-      userSkills,
+      userSkillsNested,
       projectSkillsNested,
       additionalSkillsNested,
       legacyCommands,
@@ -687,7 +686,11 @@ export const getSkillDirCommands = memoize(
         ? Promise.resolve([])
         : loadSkillsFromSkillsDir(managedSkillsDir, 'policySettings'),
       isSettingSourceEnabled('userSettings') && !skillsLocked
-        ? loadSkillsFromSkillsDir(userSkillsDir, 'userSettings')
+        ? Promise.all(
+            userSkillsDirs.map(dir =>
+              loadSkillsFromSkillsDir(dir, 'userSettings'),
+            ),
+          )
         : Promise.resolve([]),
       projectSettingsEnabled
         ? Promise.all(
@@ -712,6 +715,8 @@ export const getSkillDirCommands = memoize(
       // directory they load from.
       skillsLocked ? Promise.resolve([]) : loadSkillsFromCommandsDir(cwd),
     ])
+
+    const userSkills = userSkillsNested.flat()
 
     // Flatten and combine all skills
     const allSkillsWithPaths = [

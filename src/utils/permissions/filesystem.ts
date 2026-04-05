@@ -31,6 +31,7 @@ import {
 import { getPlanSlug, getPlansDirectory } from '../plans.js'
 import { getPlatform } from '../platform.js'
 import { getProjectDir } from '../sessionStorage.js'
+import { getSkillsPaths } from '../skillPaths.js'
 import { SETTING_SOURCES } from '../settings/constants.js'
 import {
   getSettingsFilePathForSource,
@@ -92,7 +93,7 @@ export function normalizeCaseForComparison(path: string): string {
 }
 
 /**
- * If filePath is inside a .claude/skills/{name}/ directory (project or global),
+ * If filePath is inside a skill directory (project or global),
  * return the skill name and a session-allow pattern scoped to just that skill.
  * Used to offer a narrower "allow edits to this skill only" option in the
  * permission dialog and SDK suggestions, so iterating on one skill doesn't
@@ -109,10 +110,12 @@ export function getClaudeSkillScope(
       dir: expandPath(join(getOriginalCwd(), '.claude', 'skills')),
       prefix: '/.claude/skills/',
     },
-    {
-      dir: expandPath(join(homedir(), '.claude', 'skills')),
-      prefix: '~/.claude/skills/',
-    },
+    ...getSkillsPaths('userSettings', 'skills').map(dir => ({
+      dir: expandPath(dir),
+      prefix: dir.includes(`${sep}.agents${sep}`)
+        ? '~/.agents/skills/'
+        : '~/.claude/skills/',
+    })),
   ]
 
   for (const { dir, prefix } of bases) {

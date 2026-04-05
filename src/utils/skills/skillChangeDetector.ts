@@ -12,6 +12,7 @@ import {
 import {
   clearSkillCaches,
   getSkillsPath,
+  getSkillsPaths,
   onDynamicSkillsLoaded,
 } from '../../skills/loadSkillsDir.js'
 import { resetSentSkillNames } from '../attachments.js'
@@ -172,9 +173,8 @@ async function getWatchablePaths(): Promise<string[]> {
   const fs = getFsImplementation()
   const paths: string[] = []
 
-  // User skills directory (~/.claude/skills)
-  const userSkillsPath = getSkillsPath('userSettings', 'skills')
-  if (userSkillsPath) {
+  // User skills directories (~/.agents/skills, ~/.claude/skills)
+  for (const userSkillsPath of getSkillsPaths('userSettings', 'skills')) {
     try {
       await fs.stat(userSkillsPath)
       paths.push(userSkillsPath)
