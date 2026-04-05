@@ -54,11 +54,19 @@ bun run version
 
 ## 作为全局命令使用
 
-如果你希望像普通 CLI 一样在任意目录执行 `ccc`，可以用 Bun 的链接机制注册全局命令。
+这个仓库不需要发布到 npm 才能像普通 CLI 一样全局使用。推荐做法是：
 
-### 1. 注册命令
+1. 把仓库 clone 到一个长期保留的位置
+2. 在仓库内安装依赖
+3. 通过 `bun link` 把本地 checkout 注册成全局命令
+
+这样最终效果是：你在任意项目目录里都可以直接运行 `rcode`，而不是每次先切回本仓库再 `bun run dev`。
+
+### 1. 安装依赖并注册全局命令
 
 ```bash
+cd /path/to/Refinex-Code
+bun install
 bun link
 ```
 
@@ -73,15 +81,40 @@ rehash
 ### 3. 验证是否生效
 
 ```bash
-which ccc
-ccc --help
-ccc --version
+which rcode
+rcode --help
+rcode --version
 ```
 
 如果你的 shell 还没有刷新，也可以先直接调用：
 
 ```bash
-~/.bun/bin/ccc --help
+~/.bun/bin/rcode --help
+```
+
+### 4. 在任意项目目录直接启动
+
+```bash
+cd /path/to/your-project
+rcode
+```
+
+`rcode` 会继续沿用当前终端所在目录作为工作区，不会把工作目录切回 `Refinex-Code` 仓库。
+
+### 更新本地全局版本
+
+因为这是 “链接到本地 checkout” 的方式，不是 npm 发布包，所以后续更新方式也很直接：
+
+```bash
+cd /path/to/Refinex-Code
+git pull
+bun install
+```
+
+如果你改动了 `bin` 或依赖，一般重新执行一次 `bun link` 会更稳妥：
+
+```bash
+bun link
 ```
 
 ## 文档导航
@@ -138,4 +171,3 @@ ccc --version
 - 当前仓库基于公开发布产物的还原与整理
 - 相关源码版权归原作者/原项目权利方所有
 - 仓库内容应以研究、学习和本地实验为主要用途
-

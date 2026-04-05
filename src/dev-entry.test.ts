@@ -1,17 +1,18 @@
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 
 const repoRoot = join(import.meta.dir, '..')
 
 describe('dev entry packaging', () => {
-  test('package manifest exposes the ccc launcher', () => {
+  test('package manifest exposes only the rcode launcher', () => {
     const pkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'))
 
     expect(pkg.bin).toMatchObject({
-      ccc: './bin/ccc',
+      rcode: './bin/rcode',
     })
     expect(pkg.bin.cc).toBeUndefined()
+    expect(pkg.bin.ccc).toBeUndefined()
   })
 
   test('derives the repository root from the entry file path', async () => {
@@ -31,10 +32,14 @@ describe('dev entry packaging', () => {
     ])
   })
 
-  test('ccc launcher uses a bun shebang and does not change directories', () => {
-    const launcher = readFileSync(join(repoRoot, 'bin', 'ccc'), 'utf8')
+  test('rcode launcher uses a bun shebang and does not change directories', () => {
+    const launcher = readFileSync(join(repoRoot, 'bin', 'rcode'), 'utf8')
 
     expect(launcher.startsWith('#!/usr/bin/env bun')).toBe(true)
     expect(launcher.includes('process.chdir(')).toBe(false)
+  })
+
+  test('legacy ccc launcher has been removed', () => {
+    expect(existsSync(join(repoRoot, 'bin', 'ccc'))).toBe(false)
   })
 })
