@@ -1,6 +1,6 @@
-# 桌面外壳
+# RWork 桌面外壳
 
-此应用程序是 `Refinex-Code` 的 TypeScript 优先的 Mac 桌面外壳。
+`RWork` 是 `Refinex-Code` 的 TypeScript 优先 Mac 桌面外壳，命名上对标 `Claude Code` 的 `CWork`。
 
 ## 范围
 
@@ -16,6 +16,12 @@
 - 会话持久化和配置文件处理
 - Rust 命令、事件和存储
 - 最终聊天 UX 和对话模式
+
+## 应用图标
+
+- 规范化资源位置：`apps/desktop/resources/icons/`
+- 当前提交内容：`icon.svg`、`icon.png`、`icon.icns`
+- 选用来源：`/Users/refinex/develop/素材/logo/android-chrome-512x512.png` 与同目录 `logo.svg`
 
 ## 终端边界
 

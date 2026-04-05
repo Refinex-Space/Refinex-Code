@@ -18,9 +18,18 @@ interface TerminalSession {
 }
 
 const terminalSessions = new Map<string, TerminalSession>();
-const appName = "Refinex Code Desktop";
+const appName = "RWork";
 
 let mainWindow: BrowserWindow | null = null;
+
+function resolveAppIconPath() {
+  const candidates = [
+    join(__dirname, "../../resources/icons/icon.png"),
+    join(process.resourcesPath, "icons/icon.png"),
+  ];
+
+  return candidates.find((candidate) => existsSync(candidate)) ?? null;
+}
 
 function isDirectory(pathname: string | null | undefined) {
   if (!pathname) {
@@ -206,12 +215,15 @@ function registerIpcHandlers() {
 }
 
 async function createMainWindow() {
+  const iconPath = resolveAppIconPath();
   mainWindow = new BrowserWindow({
+    title: appName,
     width: 1480,
     height: 920,
     minWidth: 1100,
     minHeight: 720,
     backgroundColor: "#0b1018",
+    icon: iconPath ?? undefined,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     trafficLightPosition: process.platform === "darwin" ? { x: 18, y: 16 } : undefined,
     webPreferences: {
@@ -233,7 +245,14 @@ async function createMainWindow() {
   }
 }
 
+app.setName(appName);
+
 app.whenReady().then(async () => {
+  const iconPath = resolveAppIconPath();
+  if (process.platform === "darwin" && iconPath) {
+    app.dock?.setIcon(iconPath);
+  }
+
   registerIpcHandlers();
   await createMainWindow();
 

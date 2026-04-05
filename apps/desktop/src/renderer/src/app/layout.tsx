@@ -50,7 +50,7 @@ export function Layout() {
     }
   };
 
-  const title = activeWorkspace?.label ?? appInfo?.appName ?? "Refinex Code Desktop";
+  const title = activeWorkspace?.label ?? appInfo?.appName ?? "RWork";
   const subtitle =
     activeWorkspace?.path ?? "TypeScript-only shell bootstrap for future desktop workflows";
 

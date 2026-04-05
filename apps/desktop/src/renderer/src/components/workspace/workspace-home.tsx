@@ -62,7 +62,7 @@ export function WorkspaceHome({
 
           <div className="mt-6 max-w-3xl">
             <h1 className="text-4xl font-semibold tracking-[-0.04em]">
-              {activeWorkspace ? activeWorkspace.label : "Desktop shell is up"}
+              {activeWorkspace ? activeWorkspace.label : "RWork shell is up"}
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--color-muted)]">
               This bootstrap keeps the Omni shell language, but strips away Rust-backed
@@ -172,7 +172,7 @@ export function WorkspaceHome({
           <div className="text-sm font-semibold">Runtime</div>
           <div className="mt-4 space-y-3 text-sm text-[var(--color-muted)]">
             <div className="rounded-2xl bg-[var(--color-surface)] px-4 py-3">
-              App name: {appInfo?.appName ?? "Refinex Code Desktop"}
+              App name: {appInfo?.appName ?? "RWork"}
             </div>
             <div className="rounded-2xl bg-[var(--color-surface)] px-4 py-3">
               Version: {appInfo?.appVersion ?? "0.1.0"}

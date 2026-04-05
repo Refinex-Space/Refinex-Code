@@ -59,7 +59,7 @@ Object.defineProperty(window, "ResizeObserver", {
 
 const desktopBridgeMock: DesktopBridge = {
   getAppInfo: vi.fn().mockResolvedValue({
-    appName: "Refinex Code Desktop",
+    appName: "RWork",
     appVersion: "0.1.0",
     platform: "darwin",
     defaultWorkspacePath: null,
