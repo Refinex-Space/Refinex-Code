@@ -20,7 +20,12 @@
   "scripts": {
     "dev": "bun run ./src/dev-entry.ts",
     "start": "bun run ./src/dev-entry.ts",
-    "version": "bun run ./src/dev-entry.ts --version"
+    "version": "bun run ./src/dev-entry.ts --version",
+    "desktop:dev": "REFINEX_DESKTOP_DEFAULT_WORKSPACE=$PWD bun run --cwd apps/desktop dev",
+    "desktop:build": "bun run --cwd apps/desktop build",
+    "desktop:preview": "REFINEX_DESKTOP_DEFAULT_WORKSPACE=$PWD bun run --cwd apps/desktop preview",
+    "desktop:typecheck": "bun run --cwd apps/desktop typecheck",
+    "desktop:test": "bun run --cwd apps/desktop test"
   },
   "dependencies": {
     "@alcalzone/ansi-tokenize": "^0.3.0",
