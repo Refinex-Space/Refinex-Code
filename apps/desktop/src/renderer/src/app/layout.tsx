@@ -16,8 +16,8 @@ import { WorkspaceHome } from "@renderer/components/workspace/workspace-home";
 import { useDesktopShell } from "@renderer/hooks/use-desktop-shell";
 import { useKeyboardShortcuts } from "@renderer/hooks/use-keyboard-shortcuts";
 import { getErrorMessage } from "@renderer/lib/errors";
+import { findActiveSession, findActiveWorktree, useWorktreeStore } from "@renderer/stores/worktree";
 import { getNextThemeLabel, useUIStore } from "@renderer/stores/ui";
-import { useWorkspaceStore } from "@renderer/stores/workspace";
 
 export function Layout() {
   useKeyboardShortcuts();
@@ -29,10 +29,19 @@ export function Layout() {
   const toggleTerminal = useUIStore((state) => state.toggleTerminal);
   const toggleTheme = useUIStore((state) => state.toggleTheme);
   const setCommandPaletteOpen = useUIStore((state) => state.setCommandPaletteOpen);
-  const activeWorkspace = useWorkspaceStore((state) =>
-    state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId) ?? null,
-  );
-  const { appInfo, openWorkspace, revealWorkspace } = useDesktopShell();
+  const storageRoot = useWorktreeStore((state) => state.storageRoot);
+  const activeWorktree = useWorktreeStore((state) => findActiveWorktree(state));
+  const activeSession = useWorktreeStore((state) => findActiveSession(state));
+  const {
+    appInfo,
+    openWorkspace,
+    revealWorkspace,
+    selectWorktree,
+    prepareSession,
+    selectSession,
+    removeSession,
+    removeWorktree,
+  } = useDesktopShell();
 
   const handleOpenWorkspace = async () => {
     try {
@@ -50,9 +59,10 @@ export function Layout() {
     }
   };
 
-  const title = activeWorkspace?.label ?? appInfo?.appName ?? "RWork";
-  const subtitle =
-    activeWorkspace?.path ?? "TypeScript-only shell bootstrap for future desktop workflows";
+  const title = activeSession?.title ?? activeWorktree?.label ?? appInfo?.appName ?? "RWork";
+  const subtitle = activeSession
+    ? activeWorktree?.worktreePath ?? "Persistent thread context"
+    : activeWorktree?.worktreePath ?? "Open multiple projects as independent worktrees";
 
   return (
     <div className="relative flex h-screen overflow-hidden bg-[var(--color-bg)] text-[var(--color-fg)]">
@@ -73,7 +83,12 @@ export function Layout() {
         <div className="h-[var(--titlebar-height)]" />
         <WorkspaceSidebar
           onOpenWorkspace={handleOpenWorkspace}
-          onRevealWorkspace={handleRevealWorkspace}
+          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+          onSelectWorktree={selectWorktree}
+          onPrepareSession={prepareSession}
+          onSelectSession={selectSession}
+          onRemoveSession={removeSession}
+          onRemoveWorktree={removeWorktree}
         />
       </motion.aside>
 
@@ -138,18 +153,21 @@ export function Layout() {
         <main className="min-h-0 flex-1 px-4 pb-4">
           <WorkspaceHome
             appInfo={appInfo}
-            activeWorkspace={activeWorkspace}
+            activeWorktree={activeWorktree}
+            activeSession={activeSession}
+            storageRoot={storageRoot}
             onOpenWorkspace={handleOpenWorkspace}
             onRevealWorkspace={handleRevealWorkspace}
             onToggleTerminal={toggleTerminal}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+            onPrepareSession={prepareSession}
           />
         </main>
 
         {terminalOpen ? (
           <TerminalPanel
-            sessionId={activeWorkspace?.id ?? "global-shell"}
-            cwd={activeWorkspace?.path ?? appInfo?.defaultWorkspacePath ?? undefined}
+            sessionId={activeSession?.id ?? activeWorktree?.id ?? "global-shell"}
+            cwd={activeWorktree?.worktreePath ?? appInfo?.defaultWorkspacePath ?? undefined}
           />
         ) : null}
       </section>
@@ -157,6 +175,9 @@ export function Layout() {
       <CommandPalette
         onOpenWorkspace={handleOpenWorkspace}
         onRevealWorkspace={handleRevealWorkspace}
+        onPrepareSession={prepareSession}
+        onSelectWorktree={selectWorktree}
+        onSelectSession={selectSession}
       />
     </div>
   );

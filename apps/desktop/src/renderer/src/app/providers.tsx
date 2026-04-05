@@ -1,19 +1,22 @@
+import { Theme } from "@radix-ui/themes";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Toaster } from "sonner";
 import { useUIStore } from "@renderer/stores/ui";
 
+type ResolvedAppearance = "light" | "dark";
+
 function resolveSystemTheme() {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-    return "dark";
+    return "dark" as ResolvedAppearance;
   }
 
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-function ThemeEffect() {
+function useResolvedTheme() {
   const theme = useUIStore((state) => state.theme);
-  const [systemTheme, setSystemTheme] = useState(resolveSystemTheme);
+  const [systemTheme, setSystemTheme] = useState<ResolvedAppearance>(resolveSystemTheme);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -32,12 +35,13 @@ function ThemeEffect() {
     };
   }, []);
 
-  useEffect(() => {
-    const resolvedTheme = theme === "system" ? systemTheme : theme;
-    document.documentElement.dataset.theme = resolvedTheme;
-  }, [systemTheme, theme]);
+  const resolvedTheme = theme === "system" ? systemTheme : theme;
 
-  return null;
+  useEffect(() => {
+    document.documentElement.dataset.theme = resolvedTheme;
+  }, [resolvedTheme]);
+
+  return resolvedTheme;
 }
 
 interface ProvidersProps {
@@ -45,9 +49,17 @@ interface ProvidersProps {
 }
 
 export function Providers({ children }: ProvidersProps) {
+  const resolvedTheme = useResolvedTheme();
+
   return (
-    <>
-      <ThemeEffect />
+    <Theme
+      appearance={resolvedTheme}
+      accentColor="blue"
+      grayColor="slate"
+      hasBackground={false}
+      radius="medium"
+      scaling="100%"
+    >
       {children}
       <Toaster
         position="top-right"
@@ -63,6 +75,6 @@ export function Providers({ children }: ProvidersProps) {
           },
         }}
       />
-    </>
+    </Theme>
   );
 }

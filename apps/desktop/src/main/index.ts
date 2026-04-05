@@ -4,11 +4,14 @@ import { join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type {
   AppInfo,
+  SessionCreateInput,
+  SidebarStateSnapshot,
   TerminalCreateInput,
   TerminalDataPayload,
   TerminalExitPayload,
   TerminalSessionInfo,
 } from "../shared/contracts";
+import { createWorktreeStateStore } from "./worktree-state-store";
 
 interface TerminalSession {
   id: string;
@@ -21,6 +24,7 @@ const terminalSessions = new Map<string, TerminalSession>();
 const appName = "RWork";
 
 let mainWindow: BrowserWindow | null = null;
+let worktreeStateStore: ReturnType<typeof createWorktreeStateStore> | null = null;
 
 function resolveAppIconPath() {
   const candidates = [
@@ -29,6 +33,15 @@ function resolveAppIconPath() {
   ];
 
   return candidates.find((candidate) => existsSync(candidate)) ?? null;
+}
+
+function resolvePreloadEntryPath() {
+  const candidates = [
+    join(__dirname, "../preload/index.mjs"),
+    join(__dirname, "../preload/index.js"),
+  ];
+
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }
 
 function isDirectory(pathname: string | null | undefined) {
@@ -43,7 +56,7 @@ function isDirectory(pathname: string | null | undefined) {
   }
 }
 
-function resolveWorkspacePath(pathname: string | null | undefined): string {
+function resolveTerminalPath(pathname: string | null | undefined): string {
   return pathname && isDirectory(pathname) ? pathname : app.getPath("home");
 }
 
@@ -119,7 +132,7 @@ function createTerminalSession({ sessionId, cwd }: TerminalCreateInput) {
     return toTerminalSessionInfo(sessionId, existing.cwd, existing.shellPath, false);
   }
 
-  const resolvedCwd = resolveWorkspacePath(cwd);
+  const resolvedCwd = resolveTerminalPath(cwd);
   const shellPath = process.env.SHELL ?? "/bin/zsh";
   const child = spawnShellProcess(shellPath, resolvedCwd);
 
@@ -174,10 +187,27 @@ function buildAppInfo(): AppInfo {
   };
 }
 
+function getWorktreeStateStore() {
+  worktreeStateStore ??= createWorktreeStateStore({
+    userDataPath: app.getPath("userData"),
+    appName,
+  });
+
+  return worktreeStateStore;
+}
+
 function registerIpcHandlers() {
   ipcMain.handle("app:info", () => buildAppInfo());
 
-  ipcMain.handle("workspace:pick", async () => {
+  ipcMain.handle("sidebar:get-state", (): SidebarStateSnapshot => {
+    return getWorktreeStateStore().getSnapshot();
+  });
+
+  ipcMain.handle("sidebar:open-worktree", (_event, projectPath: string): SidebarStateSnapshot => {
+    return getWorktreeStateStore().openWorktree(projectPath);
+  });
+
+  ipcMain.handle("sidebar:pick-and-open-worktree", async (): Promise<SidebarStateSnapshot | null> => {
     if (!mainWindow) {
       return null;
     }
@@ -186,8 +216,42 @@ function registerIpcHandlers() {
       properties: ["openDirectory", "createDirectory"],
     });
 
-    return result.canceled ? null : (result.filePaths[0] ?? null);
+    if (result.canceled || !result.filePaths[0]) {
+      return null;
+    }
+
+    return getWorktreeStateStore().openWorktree(result.filePaths[0]);
   });
+
+  ipcMain.handle("sidebar:select-worktree", (_event, worktreeId: string): SidebarStateSnapshot => {
+    return getWorktreeStateStore().selectWorktree(worktreeId);
+  });
+
+  ipcMain.handle("sidebar:remove-worktree", (_event, worktreeId: string): SidebarStateSnapshot => {
+    return getWorktreeStateStore().removeWorktree(worktreeId);
+  });
+
+  ipcMain.handle("sidebar:prepare-session", (_event, worktreeId: string): SidebarStateSnapshot => {
+    return getWorktreeStateStore().prepareSession(worktreeId);
+  });
+
+  ipcMain.handle("sidebar:create-session", (_event, input: SessionCreateInput): SidebarStateSnapshot => {
+    return getWorktreeStateStore().createSession(input.worktreeId, input.title ?? null);
+  });
+
+  ipcMain.handle(
+    "sidebar:select-session",
+    (_event, payload: { worktreeId: string; sessionId: string }): SidebarStateSnapshot => {
+      return getWorktreeStateStore().selectSession(payload.worktreeId, payload.sessionId);
+    },
+  );
+
+  ipcMain.handle(
+    "sidebar:remove-session",
+    (_event, payload: { worktreeId: string; sessionId: string }): SidebarStateSnapshot => {
+      return getWorktreeStateStore().removeSession(payload.worktreeId, payload.sessionId);
+    },
+  );
 
   ipcMain.handle("workspace:reveal", async (_event, workspacePath: string) => {
     const error = await shell.openPath(workspacePath);
@@ -216,6 +280,7 @@ function registerIpcHandlers() {
 
 async function createMainWindow() {
   const iconPath = resolveAppIconPath();
+  const preloadPath = resolvePreloadEntryPath();
   mainWindow = new BrowserWindow({
     title: appName,
     width: 1480,
@@ -227,7 +292,7 @@ async function createMainWindow() {
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     trafficLightPosition: process.platform === "darwin" ? { x: 18, y: 16 } : undefined,
     webPreferences: {
-      preload: join(__dirname, "../preload/index.js"),
+      preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,

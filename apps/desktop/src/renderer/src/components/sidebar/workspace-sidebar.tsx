@@ -1,146 +1,437 @@
-import { FolderOpen, FolderPlus, Sparkles, TerminalSquare, Trash2 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  ChevronRight,
+  FolderClosed,
+  FolderOpen,
+  FolderPlus,
+  Search,
+  SquarePen,
+  Trash2,
+} from "lucide-react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { ScrollArea } from "@renderer/components/ui/scroll-area";
-import { Button } from "@renderer/components/ui/button";
-import { Panel } from "@renderer/components/ui/panel";
+import { Tooltip } from "@renderer/components/ui/tooltip";
 import { cn } from "@renderer/lib/cn";
-import { useWorkspaceStore } from "@renderer/stores/workspace";
+import {
+  formatRelativeTimeLabel,
+  getExpandedWorktreeLabel,
+} from "@renderer/lib/worktree";
+import {
+  findActiveWorktree,
+  useWorktreeStore,
+} from "@renderer/stores/worktree";
 
 interface WorkspaceSidebarProps {
-  onOpenWorkspace: () => Promise<void>;
-  onRevealWorkspace: (workspacePath: string) => Promise<void>;
+  onOpenWorkspace: () => Promise<unknown>;
+  onOpenCommandPalette: () => void;
+  onSelectWorktree: (worktreeId: string) => Promise<unknown>;
+  onPrepareSession: (worktreeId: string) => Promise<unknown>;
+  onSelectSession: (worktreeId: string, sessionId: string) => Promise<unknown>;
+  onRemoveSession: (worktreeId: string, sessionId: string) => Promise<unknown>;
+  onRemoveWorktree: (worktreeId: string) => Promise<unknown>;
 }
-
-const plannedModules = [
-  "Conversation surface",
-  "Settings and config",
-  "Persistent sessions",
-];
 
 export function WorkspaceSidebar({
   onOpenWorkspace,
-  onRevealWorkspace,
+  onOpenCommandPalette,
+  onSelectWorktree,
+  onPrepareSession,
+  onSelectSession,
+  onRemoveSession,
+  onRemoveWorktree,
 }: WorkspaceSidebarProps) {
-  const workspaces = useWorkspaceStore((state) => state.workspaces);
-  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
-  const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
-  const removeWorkspace = useWorkspaceStore((state) => state.removeWorkspace);
+  const worktrees = useWorktreeStore((state) => state.worktrees);
+  const activeWorktreeId = useWorktreeStore((state) => state.activeWorktreeId);
+  const activeSessionId = useWorktreeStore((state) => state.activeSessionId);
+  const activeWorktree = useWorktreeStore((state) => findActiveWorktree(state));
+  const [collapsedWorktrees, setCollapsedWorktrees] = useState<
+    Record<string, boolean>
+  >({});
+
+  const worktreeLabels = useMemo(() => {
+    return new Map(
+      worktrees.map((worktree) => [
+        worktree.id,
+        getExpandedWorktreeLabel(worktree, worktrees),
+      ]),
+    );
+  }, [worktrees]);
+
+  const runAction = (operation: () => Promise<unknown>) => {
+    void operation().catch((error) => {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      toast.error(message);
+    });
+  };
 
   return (
     <div className="flex h-[calc(100vh-var(--titlebar-height))] flex-col">
-      <div className="px-4 pt-3 pb-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">
-              Workspace
-            </div>
-            <div className="mt-1 text-sm text-[var(--color-muted)]">
-              Shell-only bootstrap
-            </div>
-          </div>
-
-          <Button
-            size="icon"
-            variant="secondary"
-            aria-label="Open project"
-            title="Open project"
+      <div className="px-3 pt-2 pb-4">
+        <nav className="space-y-1">
+          <SidebarActionButton
+            label="新线程"
+            icon={SquarePen}
             onClick={() => {
-              void onOpenWorkspace();
+              if (activeWorktree) {
+                runAction(() => onPrepareSession(activeWorktree.id));
+                return;
+              }
+
+              runAction(onOpenWorkspace);
             }}
-          >
-            <FolderPlus className="h-4 w-4" />
-          </Button>
+          />
+        </nav>
+      </div>
+
+      <div className="flex items-center justify-between px-4 pb-3">
+        <span className="font-medium text-[11px] tracking-[0.08em] text-[var(--color-muted)]">
+          线程
+        </span>
+        <div className="flex items-center gap-0.5">
+          <ToolbarButton
+            label="搜索会话"
+            icon={Search}
+            onClick={onOpenCommandPalette}
+          />
+          <ToolbarButton
+            label="打开项目"
+            icon={FolderPlus}
+            onClick={() => {
+              runAction(onOpenWorkspace);
+            }}
+          />
         </div>
       </div>
 
-      <ScrollArea className="min-h-0 flex-1 px-3 pb-4">
-        <div className="space-y-3">
-          {workspaces.length === 0 ? (
-            <Panel className="p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--color-surface-strong)]">
-                  <FolderOpen className="h-4 w-4 text-[var(--color-accent)]" />
-                </div>
-                <div className="space-y-2">
-                  <h2 className="text-sm font-semibold">No workspace yet</h2>
-                  <p className="text-sm leading-6 text-[var(--color-muted)]">
-                    Open any project folder to bind the shell frame and terminal panel.
-                  </p>
-                </div>
+      <ScrollArea className="min-h-0 flex-1">
+        <div
+          className={cn(
+            "px-2 pb-5",
+            worktrees.length === 0 &&
+              "flex min-h-full items-center justify-center",
+          )}
+        >
+          {worktrees.length === 0 ? (
+            <div className="flex max-w-[188px] flex-col items-center justify-center gap-3 px-4 text-center">
+              {/* <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--color-surface)] text-[var(--color-muted)]">
+                <FolderOpen className="h-4 w-4" />
               </div>
-            </Panel>
+              <div className="space-y-1">
+                <div className="text-[13px] font-medium text-[var(--color-fg)]/88">
+                  打开一个项目开始
+                </div>
+              </div> */}
+              <button
+                type="button"
+                onClick={() => {
+                  runAction(onOpenWorkspace);
+                }}
+                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] text-[var(--color-muted)] transition-colors duration-150 hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-fg)]"
+              >
+                <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
+                Open Project
+              </button>
+            </div>
           ) : null}
 
-          {workspaces.map((workspace) => {
-            const isActive = workspace.id === activeWorkspaceId;
+          {worktrees.length > 0
+            ? worktrees.map((worktree) => {
+                const isCollapsed = collapsedWorktrees[worktree.id] ?? false;
+                const activeSessionInProject = worktree.sessions.some(
+                  (session) => session.id === activeSessionId,
+                );
+                const isActiveProject =
+                  worktree.id === activeWorktreeId || activeSessionInProject;
 
-            return (
-              <Panel
-                key={workspace.id}
-                className={cn(
-                  "overflow-hidden transition-colors",
-                  isActive
-                    ? "border-[var(--color-accent)] bg-[var(--color-surface-strong)]"
-                    : "bg-[var(--color-panel)]",
-                )}
-              >
-                <button
-                  type="button"
-                  className="w-full px-4 pt-4 text-left"
-                  onClick={() => {
-                    setActiveWorkspace(workspace.id);
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    <FolderOpen className="h-4 w-4 text-[var(--color-accent)]" />
-                    <span className="truncate text-sm font-semibold">{workspace.label}</span>
+                return (
+                  <div key={worktree.id} className="space-y-1">
+                    <div
+                      className={motionClass(
+                        "group flex items-center gap-1 rounded-[12px] px-1.5 py-0.5 transition-colors duration-150 hover:bg-[var(--color-sidebar-hover)]",
+                        isActiveProject && "bg-[var(--color-sidebar-hover)]",
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          runAction(() => onSelectWorktree(worktree.id));
+                          setCollapsedWorktrees((previous) => ({
+                            ...previous,
+                            [worktree.id]: !isCollapsed,
+                          }));
+                        }}
+                        title={worktree.worktreePath}
+                        className="flex min-w-0 flex-1 items-center gap-2 px-1 py-1 text-left"
+                        aria-label={isCollapsed ? "展开项目" : "折叠项目"}
+                      >
+                        <span className="relative flex h-[15px] w-[15px] shrink-0 items-center justify-center">
+                          {isCollapsed ? (
+                            <FolderClosed
+                              className={motionClass(
+                                "absolute h-[15px] w-[15px] transition-opacity duration-150 group-hover:opacity-0",
+                                isActiveProject
+                                  ? "text-[var(--color-fg)]/72"
+                                  : "text-[var(--color-muted)]",
+                              )}
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <FolderOpen
+                              className={motionClass(
+                                "absolute h-[15px] w-[15px] transition-opacity duration-150 group-hover:opacity-0",
+                                isActiveProject
+                                  ? "text-[var(--color-fg)]/72"
+                                  : "text-[var(--color-muted)]",
+                              )}
+                              aria-hidden="true"
+                            />
+                          )}
+                          <ChevronRight
+                            className={motionClass(
+                              "absolute h-3.5 w-3.5 opacity-0 transition-[opacity,transform] duration-150 group-hover:opacity-100",
+                              !isCollapsed && "rotate-90",
+                            )}
+                            aria-hidden="true"
+                          />
+                        </span>
+
+                        <span
+                          className={cn(
+                            "min-w-0 flex-1 truncate font-medium text-[13px] leading-5",
+                            isActiveProject
+                              ? "text-[var(--color-fg)]"
+                              : "text-[var(--color-fg)]/86",
+                          )}
+                        >
+                          {worktreeLabels.get(worktree.id) ?? worktree.label}
+                        </span>
+                      </button>
+
+                      <SidebarIconButton
+                        label="在当前项目下新建线程"
+                        icon={SquarePen}
+                        onClick={() => {
+                          runAction(() => onPrepareSession(worktree.id));
+                        }}
+                      />
+                      <SidebarIconButton
+                        label="移除项目"
+                        icon={Trash2}
+                        tone="danger"
+                        onClick={() => {
+                          runAction(() => onRemoveWorktree(worktree.id));
+                        }}
+                      />
+                    </div>
+
+                    <AnimatePresence initial={false}>
+                      {!isCollapsed && worktree.sessions.length > 0 ? (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.16, ease: "easeOut" }}
+                          className="overflow-hidden"
+                        >
+                          <div className="ml-7 space-y-0.5">
+                            <AnimatePresence initial={false} mode="popLayout">
+                              {worktree.sessions.map((session) => (
+                                <SidebarSessionItem
+                                  key={session.id}
+                                  title={session.title}
+                                  updatedAt={session.lastOpenedAt}
+                                  isActive={session.id === activeSessionId}
+                                  onSelect={() => {
+                                    runAction(() =>
+                                      onSelectSession(worktree.id, session.id),
+                                    );
+                                  }}
+                                  onRemove={() => {
+                                    runAction(() =>
+                                      onRemoveSession(worktree.id, session.id),
+                                    );
+                                  }}
+                                />
+                              ))}
+                            </AnimatePresence>
+                          </div>
+                        </motion.div>
+                      ) : null}
+                    </AnimatePresence>
                   </div>
-                  <p className="mt-2 truncate text-xs leading-5 text-[var(--color-muted)]">
-                    {workspace.path}
-                  </p>
-                </button>
-
-                <div className="flex items-center gap-2 px-4 pt-3 pb-4">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      void onRevealWorkspace(workspace.path);
-                    }}
-                  >
-                    <FolderOpen className="h-3.5 w-3.5" />
-                    Reveal
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      removeWorkspace(workspace.id);
-                    }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Remove
-                  </Button>
-                </div>
-              </Panel>
-            );
-          })}
-
-          <Panel className="p-4">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-[var(--color-accent)]" />
-              <h2 className="text-sm font-semibold">Not migrated on purpose</h2>
-            </div>
-            <ul className="mt-3 space-y-2 text-sm text-[var(--color-muted)]">
-              {plannedModules.map((item) => (
-                <li key={item} className="flex items-center gap-2">
-                  <TerminalSquare className="h-3.5 w-3.5 text-[var(--color-accent)]" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </Panel>
+                );
+              })
+            : null}
         </div>
       </ScrollArea>
     </div>
   );
+}
+
+interface SidebarActionButtonProps {
+  label: string;
+  icon: typeof SquarePen;
+  onClick: () => void;
+}
+
+function SidebarActionButton({
+  label,
+  icon: Icon,
+  onClick,
+}: SidebarActionButtonProps) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      whileHover={{ x: 1 }}
+      whileTap={{ scale: 0.995 }}
+      transition={{ duration: 0.14, ease: "easeOut" }}
+      className="flex w-full items-center gap-2.5 rounded-[10px] px-3 py-1.5 text-left text-[var(--color-fg)]/84 transition-colors duration-150 hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-fg)]"
+    >
+      <Icon
+        className="h-[15px] w-[15px] shrink-0 text-[var(--color-muted)]"
+        aria-hidden="true"
+      />
+      <span className="min-w-0 flex-1 truncate font-medium text-[13px] leading-5">
+        {label}
+      </span>
+    </motion.button>
+  );
+}
+
+interface ToolbarButtonProps {
+  label: string;
+  icon: typeof Search;
+  onClick: () => void;
+}
+
+function ToolbarButton({ label, icon: Icon, onClick }: ToolbarButtonProps) {
+  return (
+    <Tooltip content={label}>
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--color-muted)] transition-colors duration-150 hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-fg)]"
+        aria-label={label}
+      >
+        <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
+    </Tooltip>
+  );
+}
+
+interface SidebarIconButtonProps {
+  label: string;
+  icon: typeof SquarePen;
+  onClick: () => void;
+  tone?: "default" | "danger";
+}
+
+function SidebarIconButton({
+  label,
+  icon: Icon,
+  onClick,
+  tone = "default",
+}: SidebarIconButtonProps) {
+  return (
+    <Tooltip content={label}>
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          "flex h-6 w-6 shrink-0 items-center justify-center rounded-md opacity-0 transition-[opacity,color,background-color] duration-150 group-focus-within:opacity-100 group-hover:opacity-100",
+          tone === "danger"
+            ? "text-[var(--color-muted)] hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-danger)]"
+            : "text-[var(--color-muted)] hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-fg)]",
+        )}
+        aria-label={label}
+      >
+        <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
+    </Tooltip>
+  );
+}
+
+interface SidebarSessionItemProps {
+  title: string;
+  updatedAt: string;
+  isActive: boolean;
+  onSelect: () => void;
+  onRemove: () => void;
+}
+
+function SidebarSessionItem({
+  title,
+  updatedAt,
+  isActive,
+  onSelect,
+  onRemove,
+}: SidebarSessionItemProps) {
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -12 }}
+      transition={{ duration: 0.16, ease: "easeOut" }}
+      className="group relative"
+    >
+      {isActive ? (
+        <motion.div
+          layoutId="sidebar-session-active-item"
+          className="absolute inset-0 rounded-lg bg-[var(--color-sidebar-active)]"
+          transition={{
+            type: "spring",
+            stiffness: 360,
+            damping: 34,
+            mass: 0.7,
+          }}
+        />
+      ) : null}
+
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-current={isActive ? "page" : undefined}
+        className={cn(
+          "relative flex h-8 w-full items-center gap-2 rounded-[10px] px-2.5 pr-8 text-left transition-colors duration-150",
+          !isActive && "hover:bg-[var(--color-sidebar-hover)]",
+        )}
+      >
+        <span
+          className={cn(
+            "min-w-0 flex-1 truncate text-[13px] leading-5",
+            isActive
+              ? "font-semibold text-[var(--color-fg)]"
+              : "font-medium text-[var(--color-fg)]/86",
+          )}
+        >
+          {title}
+        </span>
+
+        <span className="shrink-0 font-mono text-[11px] text-[var(--color-muted)]">
+          {formatRelativeTimeLabel(updatedAt)}
+        </span>
+      </button>
+
+      <Tooltip content="移除线程">
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onRemove();
+          }}
+          className="absolute top-1/2 right-1 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[var(--color-muted)] opacity-0 transition-[opacity,color,background-color] duration-150 hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-danger)] group-focus-within:opacity-100 group-hover:opacity-100"
+          aria-label="移除线程"
+        >
+          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      </Tooltip>
+    </motion.div>
+  );
+}
+
+function motionClass(...classes: Array<string | false>): string {
+  return classes.filter(Boolean).join(" ");
 }

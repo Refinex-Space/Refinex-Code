@@ -5,15 +5,15 @@
 ## 范围
 
 - 重用来自 `Refinex-Omni` 的视觉外壳方向
-- 仅保留通用桌面框架、命令面板、侧边栏、主题系统和终端面板
+- 仅保留通用桌面框架、命令面板、支持多项目 WorkTree/多线程的侧边栏、主题系统和终端面板
 - 用 Electron `main` + `preload` + IPC 替换旧的 Rust/Tauri 桥接
-- 仅在内存中保持工作区状态
+- 将 WorkTree 与线程元数据持久化到 Electron 本地应用数据目录
 
 ## 明确未迁移
 
 - 模型选择和提供商设置
 - 聊天记录解析和结构化 LLM 响应块
-- 会话持久化和配置文件处理
+- 完整聊天 transcript 持久化和配置文件处理
 - Rust 命令、事件和存储
 - 最终聊天 UX 和对话模式
 
@@ -26,6 +26,26 @@
 ## 终端边界
 
 终端桥接使用 macOS `script` 命令从 TypeScript 分配伪终端。这使第一个切片免于 Electron 原生 PTY 重建工作。它足以作为引导外壳，但还不是完整的终端子系统。
+
+## 本地存储设计
+
+项目与线程状态不会写回用户打开的代码仓库，而是统一放在：
+
+```text
+~/Library/Application Support/RWork/sidebar-state/
+├── index.json
+└── worktrees/
+    └── <worktree-id>/
+        ├── worktree.json
+        └── sessions/
+            └── <session-id>.json
+```
+
+这样设计的原因：
+
+- Electron 桌面应用天然拥有稳定的 `userData` 目录，适合跨重启保存状态
+- 当前产品要支持多个项目并行打开，状态应该归应用本身管理，而不是污染任意目标仓库
+- 后续如果补聊天 transcript、工件缓存或配置文件，可以继续按 `worktree-id/session-id` 向下扩展
 
 ## 命令
 

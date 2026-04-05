@@ -1,31 +1,34 @@
-import { Command, FolderOpen, PanelBottom, Sparkles, TerminalSquare } from "lucide-react";
-import type { AppInfo } from "../../../../shared/contracts";
-import type { WorkspaceItem } from "@renderer/stores/workspace";
+import { Command, FolderOpen, GitBranch, HardDriveDownload, PanelBottom, Sparkles, TerminalSquare } from "lucide-react";
+import type { AppInfo, WorktreeRecord, WorktreeSessionRecord } from "../../../../shared/contracts";
 import { Button } from "@renderer/components/ui/button";
 import { Kbd } from "@renderer/components/ui/kbd";
 import { Panel } from "@renderer/components/ui/panel";
+import { compactPath } from "@renderer/lib/worktree";
 
 interface WorkspaceHomeProps {
   appInfo: AppInfo | null;
-  activeWorkspace: WorkspaceItem | null;
-  onOpenWorkspace: () => Promise<void>;
-  onRevealWorkspace: (workspacePath: string) => Promise<void>;
+  activeWorktree: WorktreeRecord | null;
+  activeSession: WorktreeSessionRecord | null;
+  storageRoot: string;
+  onOpenWorkspace: () => Promise<unknown>;
+  onRevealWorkspace: (workspacePath: string) => Promise<unknown>;
   onToggleTerminal: () => void;
   onOpenCommandPalette: () => void;
+  onPrepareSession: (worktreeId: string) => Promise<unknown>;
 }
 
 const shippedSurfaces = [
   "Window chrome and titlebar shell",
-  "In-memory workspace rail",
+  "Persistent worktree rail",
   "Command palette and keyboard shortcuts",
-  "Theme tokens and xterm-based terminal panel",
+  "Theme tokens, sessions, and xterm-based terminal panel",
 ];
 
 const deferredSurfaces = [
   "LLM response block parsing",
   "Settings panel and model controls",
-  "Session persistence and config files",
   "Chat timeline and conversation protocol",
+  "Rich thread transcript persistence",
 ];
 
 const handoffBoundaries = [
@@ -36,12 +39,20 @@ const handoffBoundaries = [
 
 export function WorkspaceHome({
   appInfo,
-  activeWorkspace,
+  activeWorktree,
+  activeSession,
+  storageRoot,
   onOpenWorkspace,
   onRevealWorkspace,
   onToggleTerminal,
   onOpenCommandPalette,
+  onPrepareSession,
 }: WorkspaceHomeProps) {
+  const headline = activeSession?.title ?? activeWorktree?.label ?? "RWork shell is up";
+  const supportingCopy = activeWorktree
+    ? "Projects are isolated as worktrees and threads are persisted outside the repo, ready for future chat and agent layers."
+    : "Open a project to pin it as a worktree, then branch into multiple local threads without writing app state into the repo.";
+
   return (
     <div className="grid h-full min-h-0 grid-cols-[minmax(0,1.65fr)_minmax(320px,0.95fr)] gap-4">
       <Panel className="relative overflow-hidden p-6">
@@ -61,13 +72,9 @@ export function WorkspaceHome({
           </div>
 
           <div className="mt-6 max-w-3xl">
-            <h1 className="text-4xl font-semibold tracking-[-0.04em]">
-              {activeWorkspace ? activeWorkspace.label : "RWork shell is up"}
-            </h1>
+            <h1 className="text-4xl font-semibold tracking-[-0.04em]">{headline}</h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--color-muted)]">
-              This bootstrap keeps the Omni shell language, but strips away Rust-backed
-              settings, models, parsing, and storage. What remains is the reusable desktop
-              frame for the TypeScript roadmap.
+              {supportingCopy}
             </p>
           </div>
 
@@ -76,6 +83,17 @@ export function WorkspaceHome({
               <FolderOpen className="h-4 w-4" />
               Open project
             </Button>
+            {activeWorktree ? (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  void onPrepareSession(activeWorktree.id);
+                }}
+              >
+                <Sparkles className="h-4 w-4" />
+                Create thread
+              </Button>
+            ) : null}
             <Button variant="secondary" onClick={onToggleTerminal}>
               <TerminalSquare className="h-4 w-4" />
               Toggle terminal
@@ -123,16 +141,16 @@ export function WorkspaceHome({
           <div className="mt-auto pt-8">
             <div className="rounded-[22px] border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4">
               <div className="flex flex-wrap items-center gap-3">
-                <span className="text-sm font-medium">Active workspace</span>
+                <span className="text-sm font-medium">Active worktree</span>
                 <span className="rounded-full bg-[var(--color-surface-strong)] px-3 py-1 text-xs text-[var(--color-muted)]">
-                  {activeWorkspace?.path ?? "Not selected"}
+                  {activeWorktree?.worktreePath ?? "Not selected"}
                 </span>
-                {activeWorkspace ? (
+                {activeWorktree ? (
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={() => {
-                      void onRevealWorkspace(activeWorkspace.path);
+                      void onRevealWorkspace(activeWorktree.worktreePath);
                     }}
                   >
                     Reveal in Finder
@@ -148,10 +166,10 @@ export function WorkspaceHome({
         <Panel className="p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold">Desktop contract</div>
+              <div className="text-sm font-semibold">Current context</div>
               <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">
-                These are the boundaries kept intentionally thin for the first TypeScript-only
-                slice.
+                The active worktree owns its own session folder, current thread focus, and terminal
+                working directory.
               </p>
             </div>
             <span className="rounded-full bg-[var(--color-surface)] px-3 py-1 text-xs text-[var(--color-muted)]">
@@ -160,16 +178,20 @@ export function WorkspaceHome({
           </div>
 
           <ul className="mt-5 space-y-3 text-sm leading-6">
-            {handoffBoundaries.map((item) => (
-              <li key={item} className="rounded-2xl bg-[var(--color-surface)] px-4 py-3">
-                {item}
-              </li>
-            ))}
+            <li className="rounded-2xl bg-[var(--color-surface)] px-4 py-3">
+              Worktree path: {activeWorktree ? compactPath(activeWorktree.worktreePath, 54) : "None"}
+            </li>
+            <li className="rounded-2xl bg-[var(--color-surface)] px-4 py-3">
+              Active thread: {activeSession?.title ?? "No thread selected"}
+            </li>
+            <li className="rounded-2xl bg-[var(--color-surface)] px-4 py-3">
+              Sessions in worktree: {activeWorktree?.sessions.length ?? 0}
+            </li>
           </ul>
         </Panel>
 
         <Panel className="p-5">
-          <div className="text-sm font-semibold">Runtime</div>
+          <div className="text-sm font-semibold">Storage design</div>
           <div className="mt-4 space-y-3 text-sm text-[var(--color-muted)]">
             <div className="rounded-2xl bg-[var(--color-surface)] px-4 py-3">
               App name: {appInfo?.appName ?? "RWork"}
@@ -178,7 +200,19 @@ export function WorkspaceHome({
               Version: {appInfo?.appVersion ?? "0.1.0"}
             </div>
             <div className="rounded-2xl bg-[var(--color-surface)] px-4 py-3">
-              Workspace memory is ephemeral in this bootstrap.
+              <div className="flex items-center gap-2">
+                <HardDriveDownload className="h-4 w-4 text-[var(--color-accent)]" />
+                Root: {storageRoot ? compactPath(storageRoot, 52) : "Pending"}
+              </div>
+            </div>
+            <div className="rounded-2xl bg-[var(--color-surface)] px-4 py-3">
+              <div className="flex items-center gap-2">
+                <GitBranch className="h-4 w-4 text-[var(--color-accent)]" />
+                Branch: {activeWorktree?.branch ?? "No git branch"}
+              </div>
+            </div>
+            <div className="rounded-2xl bg-[var(--color-surface)] px-4 py-3">
+              Worktree metadata and session files stay in app data, not inside the repo.
             </div>
           </div>
         </Panel>

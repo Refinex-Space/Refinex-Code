@@ -2,10 +2,12 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Command as CommandMenu } from "cmdk";
 import {
   FolderOpen,
+  GitBranch,
   MonitorCog,
   MoonStar,
   PanelLeftClose,
   PanelLeftOpen,
+  Sparkles,
   Search,
   SquareTerminal,
 } from "lucide-react";
@@ -13,12 +15,15 @@ import { toast } from "sonner";
 import { Button } from "@renderer/components/ui/button";
 import { Kbd } from "@renderer/components/ui/kbd";
 import { getErrorMessage } from "@renderer/lib/errors";
+import { findActiveWorktree, useWorktreeStore } from "@renderer/stores/worktree";
 import { getNextThemeLabel, useUIStore } from "@renderer/stores/ui";
-import { useWorkspaceStore } from "@renderer/stores/workspace";
 
 interface CommandPaletteProps {
-  onOpenWorkspace: () => Promise<void>;
-  onRevealWorkspace: (workspacePath: string) => Promise<void>;
+  onOpenWorkspace: () => Promise<unknown>;
+  onRevealWorkspace: (workspacePath: string) => Promise<unknown>;
+  onPrepareSession: (worktreeId: string) => Promise<unknown>;
+  onSelectWorktree: (worktreeId: string) => Promise<unknown>;
+  onSelectSession: (worktreeId: string, sessionId: string) => Promise<unknown>;
 }
 
 interface CommandItem {
@@ -27,12 +32,15 @@ interface CommandItem {
   keywords: string[];
   shortcut?: string;
   group: string;
-  run: () => void | Promise<void>;
+  run: () => void | Promise<unknown>;
 }
 
 export function CommandPalette({
   onOpenWorkspace,
   onRevealWorkspace,
+  onPrepareSession,
+  onSelectWorktree,
+  onSelectSession,
 }: CommandPaletteProps) {
   const commandPaletteOpen = useUIStore((state) => state.commandPaletteOpen);
   const terminalOpen = useUIStore((state) => state.terminalOpen);
@@ -42,11 +50,8 @@ export function CommandPalette({
   const toggleTerminal = useUIStore((state) => state.toggleTerminal);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const toggleTheme = useUIStore((state) => state.toggleTheme);
-  const workspaces = useWorkspaceStore((state) => state.workspaces);
-  const activeWorkspace = useWorkspaceStore((state) =>
-    state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId) ?? null,
-  );
-  const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
+  const worktrees = useWorktreeStore((state) => state.worktrees);
+  const activeWorktree = useWorktreeStore((state) => findActiveWorktree(state));
 
   const commands: CommandItem[] = [
     {
@@ -83,26 +88,49 @@ export function CommandPalette({
     },
   ];
 
-  if (activeWorkspace) {
+  if (activeWorktree) {
     commands.push({
       id: "workspace.reveal",
-      label: "Reveal active workspace in Finder",
-      keywords: ["finder", "workspace", "path"],
+      label: "Reveal active worktree in Finder",
+      keywords: ["finder", "workspace", "worktree", "path"],
       group: "Workspace",
-      run: () => onRevealWorkspace(activeWorkspace.path),
+      run: () => onRevealWorkspace(activeWorktree.worktreePath),
+    });
+
+    commands.push({
+      id: "session.create",
+      label: "Create thread in active worktree",
+      keywords: ["session", "thread", "create"],
+      shortcut: "cmd+shift+n",
+      group: "Session",
+      run: () => onPrepareSession(activeWorktree.id),
     });
   }
 
   commands.push(
-    ...workspaces.map((workspace) => ({
-      id: `workspace.switch.${workspace.id}`,
-      label: `Switch to ${workspace.label}`,
-      keywords: ["switch", workspace.label, workspace.path],
+    ...worktrees.map((worktree) => ({
+      id: `workspace.switch.${worktree.id}`,
+      label: `Switch to ${worktree.label}`,
+      keywords: ["switch", worktree.label, worktree.worktreePath],
       group: "Workspace",
       run: () => {
-        setActiveWorkspace(workspace.id);
+        return onSelectWorktree(worktree.id);
       },
     })),
+  );
+
+  commands.push(
+    ...worktrees.flatMap((worktree) =>
+      worktree.sessions.map((session) => ({
+        id: `session.switch.${session.id}`,
+        label: `Jump to ${session.title}`,
+        keywords: ["session", "thread", session.title, worktree.label],
+        group: "Session",
+        run: () => {
+          return onSelectSession(worktree.id, session.id);
+        },
+      })),
+    ),
   );
 
   const groups = [...new Set(commands.map((command) => command.group))];
@@ -166,6 +194,12 @@ export function CommandPalette({
                           <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--color-surface)] text-[var(--color-accent)]">
                             {command.id.startsWith("workspace.open") ? (
                               <FolderOpen className="h-4 w-4" />
+                            ) : command.id.startsWith("session") ? (
+                              command.id === "session.create" ? (
+                                <Sparkles className="h-4 w-4" />
+                              ) : (
+                                <GitBranch className="h-4 w-4" />
+                              )
                             ) : command.id.startsWith("theme") ? (
                               <MoonStar className="h-4 w-4" />
                             ) : command.id.startsWith("sidebar") ? (

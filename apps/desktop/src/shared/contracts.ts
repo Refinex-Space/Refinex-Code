@@ -5,9 +5,48 @@ export interface AppInfo {
   defaultWorkspacePath: string | null;
 }
 
+export interface WorktreeSessionRecord {
+  id: string;
+  worktreeId: string;
+  title: string;
+  status: "idle";
+  createdAt: string;
+  updatedAt: string;
+  lastOpenedAt: string;
+  storagePath: string;
+}
+
+export interface WorktreeRecord {
+  id: string;
+  label: string;
+  sourcePath: string;
+  worktreePath: string;
+  gitRoot: string | null;
+  branch: string | null;
+  isGitRepository: boolean;
+  storagePath: string;
+  createdAt: string;
+  updatedAt: string;
+  lastOpenedAt: string;
+  lastSessionId: string | null;
+  sessions: WorktreeSessionRecord[];
+}
+
+export interface SidebarStateSnapshot {
+  worktrees: WorktreeRecord[];
+  activeWorktreeId: string | null;
+  activeSessionId: string | null;
+  storageRoot: string;
+}
+
 export interface TerminalCreateInput {
   sessionId: string;
   cwd?: string | null;
+}
+
+export interface SessionCreateInput {
+  worktreeId: string;
+  title?: string | null;
 }
 
 export interface TerminalSessionInfo {
@@ -30,8 +69,16 @@ export interface TerminalExitPayload {
 
 export interface DesktopBridge {
   getAppInfo: () => Promise<AppInfo>;
-  pickWorkspace: () => Promise<string | null>;
-  revealInFinder: (workspacePath: string) => Promise<void>;
+  getSidebarState: () => Promise<SidebarStateSnapshot>;
+  openWorktree: (projectPath: string) => Promise<SidebarStateSnapshot>;
+  pickAndOpenWorktree: () => Promise<SidebarStateSnapshot | null>;
+  selectWorktree: (worktreeId: string) => Promise<SidebarStateSnapshot>;
+  removeWorktree: (worktreeId: string) => Promise<SidebarStateSnapshot>;
+  prepareSession: (worktreeId: string) => Promise<SidebarStateSnapshot>;
+  createSession: (input: SessionCreateInput) => Promise<SidebarStateSnapshot>;
+  selectSession: (worktreeId: string, sessionId: string) => Promise<SidebarStateSnapshot>;
+  removeSession: (worktreeId: string, sessionId: string) => Promise<SidebarStateSnapshot>;
+  revealInFinder: (path: string) => Promise<void>;
   createTerminalSession: (input: TerminalCreateInput) => Promise<TerminalSessionInfo>;
   writeTerminal: (sessionId: string, data: string) => Promise<void>;
   closeTerminal: (sessionId: string) => Promise<void>;

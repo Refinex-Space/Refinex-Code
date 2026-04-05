@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from "electron";
 import type {
   AppInfo,
   DesktopBridge,
+  SessionCreateInput,
+  SidebarStateSnapshot,
   TerminalCreateInput,
   TerminalDataPayload,
   TerminalExitPayload,
@@ -10,7 +12,29 @@ import type {
 
 const desktopBridge: DesktopBridge = {
   getAppInfo: () => ipcRenderer.invoke("app:info") as Promise<AppInfo>,
-  pickWorkspace: () => ipcRenderer.invoke("workspace:pick") as Promise<string | null>,
+  getSidebarState: () => ipcRenderer.invoke("sidebar:get-state") as Promise<SidebarStateSnapshot>,
+  openWorktree: (projectPath) =>
+    ipcRenderer.invoke("sidebar:open-worktree", projectPath) as Promise<SidebarStateSnapshot>,
+  pickAndOpenWorktree: () =>
+    ipcRenderer.invoke("sidebar:pick-and-open-worktree") as Promise<SidebarStateSnapshot | null>,
+  selectWorktree: (worktreeId) =>
+    ipcRenderer.invoke("sidebar:select-worktree", worktreeId) as Promise<SidebarStateSnapshot>,
+  removeWorktree: (worktreeId) =>
+    ipcRenderer.invoke("sidebar:remove-worktree", worktreeId) as Promise<SidebarStateSnapshot>,
+  prepareSession: (worktreeId) =>
+    ipcRenderer.invoke("sidebar:prepare-session", worktreeId) as Promise<SidebarStateSnapshot>,
+  createSession: (input: SessionCreateInput) =>
+    ipcRenderer.invoke("sidebar:create-session", input) as Promise<SidebarStateSnapshot>,
+  selectSession: (worktreeId, sessionId) =>
+    ipcRenderer.invoke("sidebar:select-session", {
+      worktreeId,
+      sessionId,
+    }) as Promise<SidebarStateSnapshot>,
+  removeSession: (worktreeId, sessionId) =>
+    ipcRenderer.invoke("sidebar:remove-session", {
+      worktreeId,
+      sessionId,
+    }) as Promise<SidebarStateSnapshot>,
   revealInFinder: (workspacePath) => ipcRenderer.invoke("workspace:reveal", workspacePath),
   createTerminalSession: (input) =>
     ipcRenderer.invoke("terminal:create", input) as Promise<TerminalSessionInfo>,
