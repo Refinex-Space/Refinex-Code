@@ -2,7 +2,6 @@ import { c as _c } from "react/compiler-runtime";
 import { feature } from 'bun:bundle';
 import chalk from 'chalk';
 import { mkdir } from 'fs/promises';
-import { join } from 'path';
 import * as React from 'react';
 import { use, useEffect, useState } from 'react';
 import { getOriginalCwd } from '../../bootstrap/state.js';
@@ -17,9 +16,10 @@ import { useAppState } from '../../state/AppState.js';
 import { getAgentMemoryDir } from '../../tools/AgentTool/agentMemory.js';
 import { openPath } from '../../utils/browser.js';
 import { getMemoryFiles, type MemoryFileInfo } from '../../utils/claudemd.js';
-import { getClaudeConfigHomeDir } from '../../utils/envUtils.js';
+import { getMemoryPath } from '../../utils/config.js';
 import { getDisplayPath } from '../../utils/file.js';
 import { formatRelativeTimeAgo } from '../../utils/format.js';
+import { isSharedInstructionPath } from '../../utils/instructionFiles.js';
 import { projectIsInGitRepo } from '../../utils/memory/versions.js';
 import { updateSettingsForSource } from '../../utils/settings/settings.js';
 import { Select } from '../CustomSelect/index.js';
@@ -48,8 +48,10 @@ export function MemoryFileSelector(t0) {
     onCancel
   } = t0;
   const existingMemoryFiles = use(getMemoryFiles());
-  const userMemoryPath = join(getClaudeConfigHomeDir(), "CLAUDE.md");
-  const projectMemoryPath = join(getOriginalCwd(), "CLAUDE.md");
+  const existingUserMemoryPath = existingMemoryFiles.find(file => file.type === "User" && isSharedInstructionPath(file.path) && !file.parent)?.path;
+  const existingProjectMemoryPath = existingMemoryFiles.find(file_0 => file_0.type === "Project" && isSharedInstructionPath(file_0.path) && !file_0.parent)?.path;
+  const userMemoryPath = existingUserMemoryPath ?? getMemoryPath("User");
+  const projectMemoryPath = existingProjectMemoryPath ?? getMemoryPath("Project");
   const hasUserMemory = existingMemoryFiles.some(f => f.path === userMemoryPath);
   const hasProjectMemory = existingMemoryFiles.some(f_0 => f_0.path === projectMemoryPath);
   const allMemoryFiles = [...existingMemoryFiles.filter(_temp).map(_temp2), ...(hasUserMemory ? [] : [{
@@ -87,10 +89,10 @@ export function MemoryFileSelector(t0) {
     let description;
     const isGit = projectIsInGitRepo(getOriginalCwd());
     if (file.type === "User" && !file.isNested) {
-      description = "Saved in ~/.claude/CLAUDE.md";
+      description = `Saved in ${getDisplayPath(userMemoryPath)}`;
     } else {
       if (file.type === "Project" && !file.isNested && file.path === projectMemoryPath) {
-        description = `${isGit ? "Checked in at" : "Saved in"} ./CLAUDE.md`;
+        description = `${isGit ? "Checked in at" : "Saved in"} ${getDisplayPath(projectMemoryPath)}`;
       } else {
         if (file.parent) {
           description = "@-imported";

@@ -1,4 +1,4 @@
-import { dirname, sep } from 'path'
+import { dirname } from 'path'
 import { logEvent } from 'src/services/analytics/index.js'
 import { z } from 'zod/v4'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../../services/analytics/growthbook.js'
@@ -33,6 +33,7 @@ import {
 } from '../../utils/gitDiff.js'
 import { lazySchema } from '../../utils/lazySchema.js'
 import { logError } from '../../utils/log.js'
+import { isSharedInstructionPath } from '../../utils/instructionFiles.js'
 import { expandPath } from '../../utils/path.js'
 import {
   checkWritePermissionForTool,
@@ -336,8 +337,8 @@ export const FileWriteTool = buildTool({
       limit: undefined,
     })
 
-    // Log when writing to CLAUDE.md
-    if (fullFilePath.endsWith(`${sep}CLAUDE.md`)) {
+    // 兼容保留旧事件名，但对 AGENTS.md / CLAUDE.md 都打点。
+    if (isSharedInstructionPath(fullFilePath)) {
       logEvent('tengu_write_claudemd', {})
     }
 

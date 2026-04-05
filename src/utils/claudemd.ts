@@ -30,14 +30,12 @@ import ignore from 'ignore'
 import memoize from 'lodash-es/memoize.js'
 import { Lexer } from 'marked'
 import {
-  basename,
   dirname,
   extname,
   isAbsolute,
   join,
   parse,
   relative,
-  sep,
 } from 'path'
 import picomatch from 'picomatch'
 import { logEvent } from 'src/services/analytics/index.js'
@@ -72,6 +70,12 @@ import {
   type InstructionsLoadReason,
   type InstructionsMemoryType,
 } from './hooks.js'
+import {
+  LEGACY_LOCAL_INSTRUCTION_FILE,
+  getDotClaudeInstructionCandidatePaths,
+  getSharedInstructionCandidatePaths,
+  isInstructionMemoryFilePath,
+} from './instructionFiles.js'
 import type { MemoryType } from './memory/types.js'
 import { expandPath } from './path.js'
 import { pathInWorkingPath } from './permissions/filesystem.js'
@@ -244,6 +248,23 @@ export type MemoryFileInfo = {
 
 function pathInOriginalCwd(path: string): boolean {
   return pathInWorkingPath(path, getOriginalCwd())
+}
+
+async function processInstructionCandidates(
+  paths: string[],
+  type: Extract<MemoryType, 'Managed' | 'User' | 'Project'>,
+  processedPaths: Set<string>,
+  includeExternal: boolean,
+): Promise<MemoryFileInfo[]> {
+  const result: MemoryFileInfo[] = []
+
+  for (const path of paths) {
+    result.push(
+      ...(await processMemoryFile(path, type, processedPaths, includeExternal)),
+    )
+  }
+
+  return result
 }
 
 /**
@@ -801,10 +822,10 @@ export const getMemoryFiles = memoize(
       false
 
     // Process Managed file first (always loaded - policy settings)
-    const managedClaudeMd = getMemoryPath('Managed')
+    const managedInstructionDir = dirname(getMemoryPath('Managed'))
     result.push(
-      ...(await processMemoryFile(
-        managedClaudeMd,
+      ...(await processInstructionCandidates(
+        getSharedInstructionCandidatePaths(managedInstructionDir),
         'Managed',
         processedPaths,
         includeExternal,
@@ -824,10 +845,9 @@ export const getMemoryFiles = memoize(
 
     // Process User file (only if userSettings is enabled)
     if (isSettingSourceEnabled('userSettings')) {
-      const userClaudeMd = getMemoryPath('User')
       result.push(
-        ...(await processMemoryFile(
-          userClaudeMd,
+        ...(await processInstructionCandidates(
+          getSharedInstructionCandidatePaths(getClaudeConfigHomeDir()),
           'User',
           processedPaths,
           true, // User memory can always include external files
@@ -883,23 +903,20 @@ export const getMemoryFiles = memoize(
         pathInWorkingPath(dir, canonicalRoot) &&
         !pathInWorkingPath(dir, gitRoot)
 
-      // Try reading CLAUDE.md (Project) - only if projectSettings is enabled
+      // Try reading shared instruction files (Project) - only if projectSettings is enabled
       if (isSettingSourceEnabled('projectSettings') && !skipProject) {
-        const projectPath = join(dir, 'CLAUDE.md')
         result.push(
-          ...(await processMemoryFile(
-            projectPath,
+          ...(await processInstructionCandidates(
+            getSharedInstructionCandidatePaths(dir),
             'Project',
             processedPaths,
             includeExternal,
           )),
         )
 
-        // Try reading .claude/CLAUDE.md (Project)
-        const dotClaudePath = join(dir, '.claude', 'CLAUDE.md')
         result.push(
-          ...(await processMemoryFile(
-            dotClaudePath,
+          ...(await processInstructionCandidates(
+            getDotClaudeInstructionCandidatePaths(dir),
             'Project',
             processedPaths,
             includeExternal,
@@ -919,9 +936,9 @@ export const getMemoryFiles = memoize(
         )
       }
 
-      // Try reading CLAUDE.local.md (Local) - only if localSettings is enabled
+      // Try reading the local private instruction file - only if localSettings is enabled
       if (isSettingSourceEnabled('localSettings')) {
-        const localPath = join(dir, 'CLAUDE.local.md')
+        const localPath = join(dir, LEGACY_LOCAL_INSTRUCTION_FILE)
         result.push(
           ...(await processMemoryFile(
             localPath,
@@ -933,29 +950,25 @@ export const getMemoryFiles = memoize(
       }
     }
 
-    // Process CLAUDE.md from additional directories (--add-dir) if env var is enabled
+    // Process shared instruction files from additional directories (--add-dir) if enabled
     // This is controlled by CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD and defaults to off
     // Note: we don't check isSettingSourceEnabled('projectSettings') here because --add-dir
     // is an explicit user action and the SDK defaults settingSources to [] when not specified
     if (isEnvTruthy(process.env.CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD)) {
       const additionalDirs = getAdditionalDirectoriesForClaudeMd()
       for (const dir of additionalDirs) {
-        // Try reading CLAUDE.md from the additional directory
-        const projectPath = join(dir, 'CLAUDE.md')
         result.push(
-          ...(await processMemoryFile(
-            projectPath,
+          ...(await processInstructionCandidates(
+            getSharedInstructionCandidatePaths(dir),
             'Project',
             processedPaths,
             includeExternal,
           )),
         )
 
-        // Try reading .claude/CLAUDE.md from the additional directory
-        const dotClaudePath = join(dir, '.claude', 'CLAUDE.md')
         result.push(
-          ...(await processMemoryFile(
-            dotClaudePath,
+          ...(await processInstructionCandidates(
+            getDotClaudeInstructionCandidatePaths(dir),
             'Project',
             processedPaths,
             includeExternal,
@@ -1253,21 +1266,19 @@ export async function getMemoryFilesForNestedDirectory(
 ): Promise<MemoryFileInfo[]> {
   const result: MemoryFileInfo[] = []
 
-  // Process project memory files (CLAUDE.md and .claude/CLAUDE.md)
+  // Process project instruction files
   if (isSettingSourceEnabled('projectSettings')) {
-    const projectPath = join(dir, 'CLAUDE.md')
     result.push(
-      ...(await processMemoryFile(
-        projectPath,
+      ...(await processInstructionCandidates(
+        getSharedInstructionCandidatePaths(dir),
         'Project',
         processedPaths,
         false,
       )),
     )
-    const dotClaudePath = join(dir, '.claude', 'CLAUDE.md')
     result.push(
-      ...(await processMemoryFile(
-        dotClaudePath,
+      ...(await processInstructionCandidates(
+        getDotClaudeInstructionCandidatePaths(dir),
         'Project',
         processedPaths,
         false,
@@ -1277,7 +1288,7 @@ export async function getMemoryFilesForNestedDirectory(
 
   // Process local memory file (CLAUDE.local.md)
   if (isSettingSourceEnabled('localSettings')) {
-    const localPath = join(dir, 'CLAUDE.local.md')
+    const localPath = join(dir, LEGACY_LOCAL_INSTRUCTION_FILE)
     result.push(
       ...(await processMemoryFile(localPath, 'Local', processedPaths, false)),
     )
@@ -1433,22 +1444,7 @@ export async function shouldShowClaudeMdExternalIncludesWarning(): Promise<boole
  * Check if a file path is a memory file (CLAUDE.md, CLAUDE.local.md, or .claude/rules/*.md)
  */
 export function isMemoryFilePath(filePath: string): boolean {
-  const name = basename(filePath)
-
-  // CLAUDE.md or CLAUDE.local.md anywhere
-  if (name === 'CLAUDE.md' || name === 'CLAUDE.local.md') {
-    return true
-  }
-
-  // .md files in .claude/rules/ directories
-  if (
-    name.endsWith('.md') &&
-    filePath.includes(`${sep}.claude${sep}rules${sep}`)
-  ) {
-    return true
-  }
-
-  return false
+  return isInstructionMemoryFilePath(filePath)
 }
 
 /**

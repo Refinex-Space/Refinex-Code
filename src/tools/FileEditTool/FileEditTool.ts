@@ -1,4 +1,4 @@
-import { dirname, isAbsolute, sep } from 'path'
+import { dirname, isAbsolute } from 'path'
 import { logEvent } from 'src/services/analytics/index.js'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../../services/analytics/growthbook.js'
 import { diagnosticTracker } from '../../services/diagnosticTracking.js'
@@ -40,6 +40,7 @@ import {
   fetchSingleFileGitDiff,
   type ToolUseDiff,
 } from '../../utils/gitDiff.js'
+import { isSharedInstructionPath } from '../../utils/instructionFiles.js'
 import { logError } from '../../utils/log.js'
 import { expandPath } from '../../utils/path.js'
 import {
@@ -525,7 +526,7 @@ export const FileEditTool = buildTool({
     })
 
     // 7. Log events
-    if (absoluteFilePath.endsWith(`${sep}CLAUDE.md`)) {
+    if (isSharedInstructionPath(absoluteFilePath)) {
       logEvent('tengu_write_claudemd', {})
     }
     countLinesChanged(patch)

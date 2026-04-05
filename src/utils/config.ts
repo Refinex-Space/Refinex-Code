@@ -26,6 +26,12 @@ import { safeParseJSON } from './json.js'
 import { stripBOM } from './jsonRead.js'
 import * as lockfile from './lockfile.js'
 import { logError } from './log.js'
+import {
+  LEGACY_LOCAL_INSTRUCTION_FILE,
+  LEGACY_SHARED_INSTRUCTION_FILE,
+  PRIMARY_SHARED_INSTRUCTION_FILE,
+  resolvePreferredSharedInstructionPath,
+} from './instructionFiles.js'
 import type { MemoryType } from './memory/types.js'
 import { normalizePathForConfigKey } from './path.js'
 import { getEssentialTrafficOnlyReason } from './privacyLevel.js'
@@ -1778,16 +1784,29 @@ export function recordFirstStartTime(): void {
 
 export function getMemoryPath(memoryType: MemoryType): string {
   const cwd = getOriginalCwd()
+  const fs = getFsImplementation()
 
   switch (memoryType) {
     case 'User':
-      return join(getClaudeConfigHomeDir(), 'CLAUDE.md')
+      return resolvePreferredSharedInstructionPath(
+        join(getClaudeConfigHomeDir(), PRIMARY_SHARED_INSTRUCTION_FILE),
+        join(getClaudeConfigHomeDir(), LEGACY_SHARED_INSTRUCTION_FILE),
+        fs,
+      )
     case 'Local':
-      return join(cwd, 'CLAUDE.local.md')
+      return join(cwd, LEGACY_LOCAL_INSTRUCTION_FILE)
     case 'Project':
-      return join(cwd, 'CLAUDE.md')
+      return resolvePreferredSharedInstructionPath(
+        join(cwd, PRIMARY_SHARED_INSTRUCTION_FILE),
+        join(cwd, LEGACY_SHARED_INSTRUCTION_FILE),
+        fs,
+      )
     case 'Managed':
-      return join(getManagedFilePath(), 'CLAUDE.md')
+      return resolvePreferredSharedInstructionPath(
+        join(getManagedFilePath(), PRIMARY_SHARED_INSTRUCTION_FILE),
+        join(getManagedFilePath(), LEGACY_SHARED_INSTRUCTION_FILE),
+        fs,
+      )
     case 'AutoMem':
       return getAutoMemEntrypoint()
   }
