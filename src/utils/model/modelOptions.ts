@@ -32,6 +32,14 @@ import {
 } from './model.js'
 import { has1mContext } from '../context.js'
 import { getGlobalConfig } from '../config.js'
+import type { EffortLevel } from 'src/entrypoints/sdk/runtimeTypes.js'
+import type { ProviderVerbosity } from '../providerRegistry.js'
+import { getConfiguredModelProviderInfo } from '../providerRegistry.js'
+import {
+  getConfiguredProviderModelCatalog,
+  getDefaultEffortLevelForConfiguredProviderModel,
+  getDefaultVerbosityForConfiguredProviderModel,
+} from './providerCatalog.js'
 
 // @[MODEL LAUNCH]: Update all the available and default model option strings below.
 
@@ -40,9 +48,57 @@ export type ModelOption = {
   label: string
   description: string
   descriptionForModel?: string
+  supportedEffortLevels?: EffortLevel[]
+  defaultEffortLevel?: EffortLevel
+  supportedVerbosityLevels?: ProviderVerbosity[]
+  defaultVerbosity?: ProviderVerbosity
+  supportsFastMode?: boolean
+  supportsAutoMode?: boolean
+}
+
+function isConfiguredProviderCatalogActive(): boolean {
+  return getConfiguredProviderModelCatalog().length > 0
+}
+
+function getConfiguredProviderLabel(): string {
+  const configured = getConfiguredModelProviderInfo()
+  return configured.provider.name ?? configured.resolvedId
+}
+
+function getConfiguredProviderDefaultOption(): ModelOption {
+  const providerLabel = getConfiguredProviderLabel()
+  const currentModel = renderDefaultModelSetting(getDefaultMainLoopModelSetting())
+  return {
+    value: null,
+    label: 'Default (configured)',
+    description: `Use the configured ${providerLabel} default (currently ${currentModel})`,
+    descriptionForModel: `Configured default for ${providerLabel} (currently ${currentModel})`,
+  }
+}
+
+function getConfiguredProviderCatalogOptions(): ModelOption[] {
+  return getConfiguredProviderModelCatalog().map(entry => ({
+    value: entry.id,
+    label: entry.label,
+    description: entry.description,
+    descriptionForModel: entry.description,
+    supportedEffortLevels: entry.supportedEffortLevels as EffortLevel[] | undefined,
+    defaultEffortLevel:
+      getDefaultEffortLevelForConfiguredProviderModel(entry.id) as
+        | EffortLevel
+        | undefined,
+    supportedVerbosityLevels: entry.supportedVerbosityLevels,
+    defaultVerbosity: getDefaultVerbosityForConfiguredProviderModel(entry.id),
+    supportsFastMode: entry.supportsFastMode,
+    supportsAutoMode: entry.supportsAutoMode,
+  }))
 }
 
 export function getDefaultOptionForUser(fastMode = false): ModelOption {
+  if (isConfiguredProviderCatalogActive()) {
+    return getConfiguredProviderDefaultOption()
+  }
+
   if (process.env.USER_TYPE === 'ant') {
     const currentModel = renderDefaultModelSetting(
       getDefaultMainLoopModelSetting(),
@@ -269,6 +325,10 @@ function getOpusPlanOption(): ModelOption {
 // @[MODEL LAUNCH]: Update the model picker lists below to include/reorder options for the new model.
 // Each user tier (ant, Max/Team Premium, Pro/Team Standard/Enterprise, PAYG 1P, PAYG 3P) has its own list.
 function getModelOptionsBase(fastMode = false): ModelOption[] {
+  if (isConfiguredProviderCatalogActive()) {
+    return [getDefaultOptionForUser(fastMode), ...getConfiguredProviderCatalogOptions()]
+  }
+
   if (process.env.USER_TYPE === 'ant') {
     // Build options from antModels config
     const antModelOptions: ModelOption[] = getAntModels().map(m => ({
@@ -461,25 +521,27 @@ function getKnownModelOption(model: string): ModelOption | null {
 export function getModelOptions(fastMode = false): ModelOption[] {
   const options = getModelOptionsBase(fastMode)
 
-  // Add the custom model from the ANTHROPIC_CUSTOM_MODEL_OPTION env var
-  const envCustomModel = process.env.ANTHROPIC_CUSTOM_MODEL_OPTION
-  if (
-    envCustomModel &&
-    !options.some(existing => existing.value === envCustomModel)
-  ) {
-    options.push({
-      value: envCustomModel,
-      label: process.env.ANTHROPIC_CUSTOM_MODEL_OPTION_NAME ?? envCustomModel,
-      description:
-        process.env.ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION ??
-        `Custom model (${envCustomModel})`,
-    })
-  }
+  if (!isConfiguredProviderCatalogActive()) {
+    // Add the custom model from the ANTHROPIC_CUSTOM_MODEL_OPTION env var
+    const envCustomModel = process.env.ANTHROPIC_CUSTOM_MODEL_OPTION
+    if (
+      envCustomModel &&
+      !options.some(existing => existing.value === envCustomModel)
+    ) {
+      options.push({
+        value: envCustomModel,
+        label: process.env.ANTHROPIC_CUSTOM_MODEL_OPTION_NAME ?? envCustomModel,
+        description:
+          process.env.ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION ??
+          `Custom model (${envCustomModel})`,
+      })
+    }
 
-  // Append additional model options fetched during bootstrap
-  for (const opt of getGlobalConfig().additionalModelOptionsCache ?? []) {
-    if (!options.some(existing => existing.value === opt.value)) {
-      options.push(opt)
+    // Append additional model options fetched during bootstrap
+    for (const opt of getGlobalConfig().additionalModelOptionsCache ?? []) {
+      if (!options.some(existing => existing.value === opt.value)) {
+        options.push(opt)
+      }
     }
   }
 

@@ -376,6 +376,18 @@ export const SettingsSchema = lazySchema(() =>
         .string()
         .optional()
         .describe('Override the default model used by Claude Code'),
+      modelProvider: z
+        .string()
+        .optional()
+        .describe(
+          'Configured model provider ID from ~/.claude/providers.json. Only trusted sources are applied at runtime.',
+        ),
+      modelVerbosity: z
+        .enum(['low', 'medium', 'high'])
+        .optional()
+        .describe(
+          'Configured response verbosity for providers that support GPT-5 Responses verbosity controls.',
+        ),
       // Enterprise allowlist of models
       availableModels: z
         .array(z.string())
@@ -703,8 +715,8 @@ export const SettingsSchema = lazySchema(() =>
       effortLevel: z
         .enum(
           process.env.USER_TYPE === 'ant'
-            ? ['low', 'medium', 'high', 'max']
-            : ['low', 'medium', 'high'],
+            ? ['minimal', 'low', 'medium', 'high', 'max', 'xhigh']
+            : ['minimal', 'low', 'medium', 'high', 'xhigh'],
         )
         .optional()
         .catch(undefined)

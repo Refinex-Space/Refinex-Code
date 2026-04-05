@@ -7,6 +7,7 @@ here.
 ## Suggested Entries
 
 - `core-beliefs.md`
+- `codex-provider-support.md`
 - major boundary decisions
 - important technology choices and tradeoffs
 

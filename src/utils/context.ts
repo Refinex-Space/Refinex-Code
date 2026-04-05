@@ -4,6 +4,8 @@ import { getGlobalConfig } from './config.js'
 import { isEnvTruthy } from './envUtils.js'
 import { getCanonicalName } from './model/model.js'
 import { getModelCapability } from './model/modelCapabilities.js'
+import { resolveAntModel } from './model/antModels.js'
+import { getDefaultContextWindowForConfiguredProviderModel } from './model/providerCatalog.js'
 
 // Model context window size (200k tokens for all models right now)
 export const MODEL_CONTEXT_WINDOW_DEFAULT = 200_000
@@ -88,6 +90,13 @@ export function getContextWindowForModel(
   if (getSonnet1mExpTreatmentEnabled(model)) {
     return 1_000_000
   }
+
+  const configuredProviderContextWindow =
+    getDefaultContextWindowForConfiguredProviderModel(model)
+  if (configuredProviderContextWindow !== undefined) {
+    return configuredProviderContextWindow
+  }
+
   if (process.env.USER_TYPE === 'ant') {
     const antModel = resolveAntModel(model)
     if (antModel?.contextWindow) {

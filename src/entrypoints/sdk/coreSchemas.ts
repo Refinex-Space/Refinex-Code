@@ -1057,9 +1057,13 @@ export const ModelInfoSchema = lazySchema(() =>
         .optional()
         .describe('Whether this model supports effort levels'),
       supportedEffortLevels: z
-        .array(z.enum(['low', 'medium', 'high', 'max']))
+        .array(z.enum(['minimal', 'low', 'medium', 'high', 'max', 'xhigh']))
         .optional()
         .describe('Available effort levels for this model'),
+      supportedVerbosityLevels: z
+        .array(z.enum(['low', 'medium', 'high']))
+        .optional()
+        .describe('Available verbosity levels for this model'),
       supportsAdaptiveThinking: z
         .boolean()
         .optional()
@@ -1166,7 +1170,10 @@ export const AgentDefinitionSchema = lazySchema(() =>
           "Scope for auto-loading agent memory files. 'user' - ~/.claude/agent-memory/<agentType>/, 'project' - .claude/agent-memory/<agentType>/, 'local' - .claude/agent-memory-local/<agentType>/",
         ),
       effort: z
-        .union([z.enum(['low', 'medium', 'high', 'max']), z.number().int()])
+        .union([
+          z.enum(['minimal', 'low', 'medium', 'high', 'max', 'xhigh']),
+          z.number().int(),
+        ])
         .optional()
         .describe(
           'Reasoning effort level for this agent. Either a named level or an integer',

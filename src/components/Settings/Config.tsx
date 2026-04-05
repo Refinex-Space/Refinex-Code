@@ -19,6 +19,7 @@ import { isBridgeEnabled } from '../../bridge/bridgeEnabled.js';
 import { ThemePicker } from '../ThemePicker.js';
 import { useAppState, useSetAppState, useAppStateStore } from '../../state/AppState.js';
 import { ModelPicker } from '../ModelPicker.js';
+import { ProviderManager } from '../provider/ProviderManager.js';
 import { modelDisplayString, isOpus1mMergeEnabled } from '../../utils/model/model.js';
 import { isBilledAsExtraUsage } from '../../utils/extraUsage.js';
 import { ClaudeMdExternalIncludesDialog } from '../ClaudeMdExternalIncludesDialog.js';
@@ -36,6 +37,7 @@ import { useIsInsideModal } from '../../context/modalContext.js';
 import { SearchBox } from '../SearchBox.js';
 import { isSupportedTerminal, hasAccessToIDEExtensionDiffFeature } from '../../utils/ide.js';
 import { getInitialSettings, getSettingsForSource, updateSettingsForSource } from '../../utils/settings/settings.js';
+import { getConfiguredModelProviderInfo, getProviderDriverLabel } from '../../utils/providerRegistry.js';
 import { getUserMsgOptIn, setUserMsgOptIn } from '../../bootstrap/state.js';
 import { DEFAULT_OUTPUT_STYLE_NAME } from 'src/constants/outputStyles.js';
 import { isEnvTruthy, isRunningOnHomespace } from 'src/utils/envUtils.js';
@@ -81,7 +83,7 @@ type Setting = (SettingBase & {
   onChange(value: string): void;
   type: 'managedEnum';
 });
-type SubMenu = 'Theme' | 'Model' | 'TeammateModel' | 'ExternalIncludes' | 'OutputStyle' | 'ChannelDowngrade' | 'Language' | 'EnableAutoUpdates';
+type SubMenu = 'Theme' | 'Model' | 'Provider' | 'TeammateModel' | 'ExternalIncludes' | 'OutputStyle' | 'ChannelDowngrade' | 'Language' | 'EnableAutoUpdates';
 export function Config({
   onClose,
   context,
@@ -175,6 +177,8 @@ export function Config({
   const isDirty = React.useRef(false);
   const [showThinkingWarning, setShowThinkingWarning] = useState(false);
   const [showSubmenu, setShowSubmenu] = useState<SubMenu | null>(null);
+  const configuredProvider = getConfiguredModelProviderInfo();
+  const configuredProviderLabel = `${configuredProvider.resolvedId} (${getProviderDriverLabel(configuredProvider.provider.driver)})`;
   const {
     query: searchQuery,
     setQuery: setSearchQuery,
@@ -808,6 +812,12 @@ export function Config({
       });
     }
   }, {
+    id: 'provider',
+    label: 'Provider',
+    value: configuredProviderLabel,
+    type: 'managedEnum' as const,
+    onChange() {}
+  }, {
     id: 'model',
     label: 'Model',
     value: mainLoopModel === null ? 'Default (recommended)' : mainLoopModel,
@@ -1297,12 +1307,16 @@ export function Config({
       }
       return;
     }
-    if (setting_0.id === 'theme' || setting_0.id === 'model' || setting_0.id === 'teammateDefaultModel' || setting_0.id === 'showExternalIncludesDialog' || setting_0.id === 'outputStyle' || setting_0.id === 'language') {
+    if (setting_0.id === 'theme' || setting_0.id === 'provider' || setting_0.id === 'model' || setting_0.id === 'teammateDefaultModel' || setting_0.id === 'showExternalIncludesDialog' || setting_0.id === 'outputStyle' || setting_0.id === 'language') {
       // managedEnum items open a submenu — isDirty is set by the submenu's
       // completion callback, not here (submenu may be cancelled).
       switch (setting_0.id) {
         case 'theme':
           setShowSubmenu('Theme');
+          setTabsHidden(true);
+          return;
+        case 'provider':
+          setShowSubmenu('Provider');
           setTabsHidden(true);
           return;
         case 'model':
@@ -1476,6 +1490,27 @@ export function Config({
         setShowSubmenu(null);
         setTabsHidden(false);
       }} showFastModeNotice={isFastModeEnabled() ? isFastMode && isFastModeSupportedByModel(mainLoopModel) && isFastModeAvailable() : false} />
+          <Text dimColor>
+            <Byline>
+              <KeyboardShortcutHint shortcut="Enter" action="confirm" />
+              <ConfigurableShortcutHint action="confirm:no" context="Confirmation" fallback="Esc" description="cancel" />
+            </Byline>
+          </Text>
+        </> : showSubmenu === 'Provider' ? <>
+          <ProviderManager onApplied={result => {
+        isDirty.current = true;
+        setSettingsData(getInitialSettings());
+        setChanges(prev_25 => ({
+          ...prev_25,
+          provider: result.mainLoopModel === null ? 'anthropic (Anthropic Messages)' : 'codex (OpenAI Responses)'
+        }));
+      }} onFinish={() => {
+        setShowSubmenu(null);
+        setTabsHidden(false);
+      }} onCancel={() => {
+        setShowSubmenu(null);
+        setTabsHidden(false);
+      }} />
           <Text dimColor>
             <Byline>
               <KeyboardShortcutHint shortcut="Enter" action="confirm" />

@@ -7,20 +7,35 @@ import { getAPIProvider } from './model/providers.js'
 import { get3PModelCapabilityOverride } from './model/modelSupportOverrides.js'
 import { isEnvTruthy } from './envUtils.js'
 import type { EffortLevel } from 'src/entrypoints/sdk/runtimeTypes.js'
+import {
+  getAntModelOverrideConfig,
+  resolveAntModel,
+} from './model/antModels.js'
+import {
+  getDefaultEffortLevelForConfiguredProviderModel,
+  getSupportedEffortLevelsForConfiguredProviderModel,
+} from './model/providerCatalog.js'
 
 export type { EffortLevel }
 
 export const EFFORT_LEVELS = [
+  'minimal',
   'low',
   'medium',
   'high',
   'max',
+  'xhigh',
 ] as const satisfies readonly EffortLevel[]
 
 export type EffortValue = EffortLevel | number
 
 // @[MODEL LAUNCH]: Add the new model to the allowlist if it supports the effort parameter.
 export function modelSupportsEffort(model: string): boolean {
+  const providerLevels = getSupportedEffortLevelsForConfiguredProviderModel(model)
+  if (providerLevels && providerLevels.length > 0) {
+    return true
+  }
+
   const m = model.toLowerCase()
   if (isEnvTruthy(process.env.CLAUDE_CODE_ALWAYS_ENABLE_EFFORT)) {
     return true
@@ -51,6 +66,11 @@ export function modelSupportsEffort(model: string): boolean {
 // @[MODEL LAUNCH]: Add the new model to the allowlist if it supports 'max' effort.
 // Per API docs, 'max' is Opus 4.6 only for public models — other models return an error.
 export function modelSupportsMaxEffort(model: string): boolean {
+  const providerLevels = getSupportedEffortLevelsForConfiguredProviderModel(model)
+  if (providerLevels && providerLevels.length > 0) {
+    return providerLevels.includes('max')
+  }
+
   const supported3P = get3PModelCapabilityOverride(model, 'max_effort')
   if (supported3P !== undefined) {
     return supported3P
@@ -66,6 +86,21 @@ export function modelSupportsMaxEffort(model: string): boolean {
 
 export function isEffortLevel(value: string): value is EffortLevel {
   return (EFFORT_LEVELS as readonly string[]).includes(value)
+}
+
+export function getSupportedEffortLevelsForModel(
+  model: string,
+): EffortLevel[] | undefined {
+  const providerLevels = getSupportedEffortLevelsForConfiguredProviderModel(model)
+  if (providerLevels && providerLevels.length > 0) {
+    return providerLevels as EffortLevel[]
+  }
+  if (!modelSupportsEffort(model)) {
+    return undefined
+  }
+  return modelSupportsMaxEffort(model)
+    ? ['low', 'medium', 'high', 'max']
+    : ['low', 'medium', 'high']
 }
 
 export function parseEffortValue(value: unknown): EffortValue | undefined {
@@ -95,10 +130,10 @@ export function parseEffortValue(value: unknown): EffortValue | undefined {
 export function toPersistableEffort(
   value: EffortValue | undefined,
 ): EffortLevel | undefined {
-  if (value === 'low' || value === 'medium' || value === 'high') {
-    return value
-  }
-  if (value === 'max' && process.env.USER_TYPE === 'ant') {
+  if (typeof value === 'string' && isEffortLevel(value)) {
+    if (value === 'max' && process.env.USER_TYPE !== 'ant') {
+      return undefined
+    }
     return value
   }
   return undefined
@@ -159,11 +194,36 @@ export function resolveAppliedEffort(
   }
   const resolved =
     envOverride ?? appStateEffortValue ?? getDefaultEffortForModel(model)
-  // API rejects 'max' on non-Opus-4.6 models — downgrade to 'high'.
-  if (resolved === 'max' && !modelSupportsMaxEffort(model)) {
-    return 'high'
+  if (typeof resolved === 'string') {
+    return clampEffortLevelToSupported(model, resolved)
   }
   return resolved
+}
+
+function clampEffortLevelToSupported(
+  model: string,
+  effort: EffortLevel,
+): EffortLevel {
+  const supported = getSupportedEffortLevelsForModel(model)
+  if (!supported || supported.includes(effort)) {
+    return effort
+  }
+
+  if (effort === 'minimal') {
+    return supported[0] ?? 'high'
+  }
+
+  if (effort === 'xhigh' || effort === 'max') {
+    return supported.includes('xhigh')
+      ? 'xhigh'
+      : supported.includes('max')
+        ? 'max'
+        : supported[supported.length - 1] ?? 'high'
+  }
+
+  return supported.includes('high')
+    ? 'high'
+    : supported[supported.length - 1] ?? 'high'
 }
 
 /**
@@ -223,6 +283,8 @@ export function convertEffortValueToLevel(value: EffortValue): EffortLevel {
  */
 export function getEffortLevelDescription(level: EffortLevel): string {
   switch (level) {
+    case 'minimal':
+      return 'Minimal reasoning for fast routing and light edits'
     case 'low':
       return 'Quick, straightforward implementation with minimal overhead'
     case 'medium':
@@ -231,6 +293,8 @@ export function getEffortLevelDescription(level: EffortLevel): string {
       return 'Comprehensive implementation with extensive testing and documentation'
     case 'max':
       return 'Maximum capability with deepest reasoning (Opus 4.6 only)'
+    case 'xhigh':
+      return 'Deepest reasoning available for providers that support xhigh effort'
   }
 }
 
@@ -279,6 +343,11 @@ export function getOpusDefaultEffortConfig(): OpusDefaultEffortConfig {
 export function getDefaultEffortForModel(
   model: string,
 ): EffortValue | undefined {
+  const configuredDefault = getDefaultEffortLevelForConfiguredProviderModel(model)
+  if (configuredDefault) {
+    return configuredDefault
+  }
+
   if (process.env.USER_TYPE === 'ant') {
     const config = getAntModelOverrideConfig()
     const isDefaultModel =

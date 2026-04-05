@@ -28,10 +28,22 @@ import { LIGHTNING_BOLT } from '../../constants/figures.js'
 import { isModelAllowed } from './modelAllowlist.js'
 import { type ModelAlias, isModelAlias } from './aliases.js'
 import { capitalize } from '../stringUtils.js'
+import { getConfiguredModelProviderInfo } from '../providerRegistry.js'
+import { getConfiguredProviderDefaultModelId } from './providerCatalog.js'
 
 export type ModelShortName = string
 export type ModelName = string
 export type ModelSetting = ModelName | ModelAlias | null
+
+function getConfiguredNonAnthropicDefaultModelSetting():
+  | ModelName
+  | undefined {
+  const configured = getConfiguredModelProviderInfo()
+  if (configured.provider.driver === 'anthropic-messages') {
+    return undefined
+  }
+  return getConfiguredProviderDefaultModelId()
+}
 
 export function getSmallFastModel(): ModelName {
   return process.env.ANTHROPIC_SMALL_FAST_MODEL || getDefaultHaikuModel()
@@ -98,6 +110,10 @@ export function getMainLoopModel(): ModelName {
 }
 
 export function getBestModel(): ModelName {
+  const configuredDefault = getConfiguredNonAnthropicDefaultModelSetting()
+  if (configuredDefault) {
+    return parseUserSpecifiedModel(configuredDefault)
+  }
   return getDefaultOpusModel()
 }
 
@@ -176,6 +192,11 @@ export function getRuntimeMainLoopModel(params: {
  * @returns The default model setting to use
  */
 export function getDefaultMainLoopModelSetting(): ModelName | ModelAlias {
+  const configuredDefault = getConfiguredNonAnthropicDefaultModelSetting()
+  if (configuredDefault) {
+    return configuredDefault
+  }
+
   // Ants default to defaultModel from flag config, or Opus 1M if not configured
   if (process.env.USER_TYPE === 'ant') {
     return (
@@ -348,6 +369,14 @@ export function renderModelSetting(setting: ModelName | ModelAlias): string {
  */
 export function getPublicModelDisplayName(model: ModelName): string | null {
   switch (model) {
+    case 'gpt-5.4':
+      return 'GPT-5.4'
+    case 'gpt-5.3-codex':
+      return 'GPT-5.3-Codex'
+    case 'gpt-5.4-mini':
+      return 'GPT-5.4 Mini'
+    case 'gpt-5-pro':
+      return 'GPT-5 Pro'
     case getModelStrings().opus46:
       return 'Opus 4.6'
     case getModelStrings().opus46 + '[1m]':
@@ -425,6 +454,9 @@ export function renderModelName(model: ModelName): string {
 export function getPublicModelName(model: ModelName): string {
   const publicName = getPublicModelDisplayName(model)
   if (publicName) {
+    if (model.toLowerCase().startsWith('gpt-')) {
+      return `OpenAI ${publicName}`
+    }
     return `Claude ${publicName}`
   }
   return `Claude (${model})`
@@ -555,6 +587,9 @@ export function isLegacyModelRemapEnabled(): boolean {
 
 export function modelDisplayString(model: ModelSetting): string {
   if (model === null) {
+    if (getConfiguredModelProviderInfo().provider.driver !== 'anthropic-messages') {
+      return `Default (${renderDefaultModelSetting(getDefaultMainLoopModelSetting())})`
+    }
     if (process.env.USER_TYPE === 'ant') {
       return `Default for Ants (${renderDefaultModelSetting(getDefaultMainLoopModelSetting())})`
     } else if (isClaudeAISubscriber()) {
@@ -568,6 +603,21 @@ export function modelDisplayString(model: ModelSetting): string {
 
 // @[MODEL LAUNCH]: Add a marketing name mapping for the new model below.
 export function getMarketingNameForModel(modelId: string): string | undefined {
+  const normalizedModel = modelId.toLowerCase()
+
+  if (normalizedModel === 'gpt-5.4') {
+    return 'GPT-5.4'
+  }
+  if (normalizedModel === 'gpt-5.3-codex') {
+    return 'GPT-5.3-Codex'
+  }
+  if (normalizedModel === 'gpt-5.4-mini') {
+    return 'GPT-5.4 Mini'
+  }
+  if (normalizedModel === 'gpt-5-pro') {
+    return 'GPT-5 Pro'
+  }
+
   if (getAPIProvider() === 'foundry') {
     // deployment ID is user-defined in Foundry, so it may have no relation to the actual model
     return undefined

@@ -13,6 +13,10 @@ import { getIdeClientName, type IDEExtensionInstallationStatus, isJetBrainsIde, 
 import { getClaudeAiUserDefaultModelDescription, modelDisplayString } from './model/model.js';
 import { getAPIProvider } from './model/providers.js';
 import { getMTLSConfig } from './mtls.js';
+import { getConfiguredModelProviderInfo, getProviderDriverLabel } from './providerRegistry.js';
+import { getAutoCompactTokenLimitForConfiguredProviderModel, getDefaultContextWindowForConfiguredProviderModel } from './model/providerCatalog.js';
+import { getProviderAuthStoreInfo, hasProviderAuth } from './providerAuthStore.js';
+import { getRuntimeProviderAdapterSelection } from '../services/api/providerAdapter.js';
 import { checkInstall } from './nativeInstaller/index.js';
 import { getProxyUrl } from './proxy.js';
 import { SandboxManager } from './sandbox/sandbox-adapter.js';
@@ -240,6 +244,51 @@ export function buildAccountProperties(): Property[] {
 export function buildAPIProviderProperties(): Property[] {
   const apiProvider = getAPIProvider();
   const properties: Property[] = [];
+  const configuredProvider = getConfiguredModelProviderInfo();
+  const runtimeAdapter = getRuntimeProviderAdapterSelection();
+  const configuredProviderValue = configuredProvider.warning === 'unknown-provider' && configuredProvider.requestedId ? `${configuredProvider.requestedId} -> ${configuredProvider.resolvedId} (${getProviderDriverLabel(configuredProvider.provider.driver)} fallback)` : `${configuredProvider.resolvedId} (${getProviderDriverLabel(configuredProvider.provider.driver)})`;
+  properties.push({
+    label: 'Configured model provider',
+    value: configuredProviderValue
+  });
+  if (configuredProvider.resolvedId !== 'anthropic') {
+    if (configuredProvider.provider.baseUrl) {
+      properties.push({
+        label: 'Configured provider base URL',
+        value: configuredProvider.provider.baseUrl
+      });
+    }
+    const authStore = getProviderAuthStoreInfo();
+    properties.push({
+      label: 'Provider auth store',
+      value: authStore.backendName
+    });
+    properties.push({
+      label: 'Provider auth',
+      value: hasProviderAuth(configuredProvider.resolvedId) ? 'Configured' : 'Missing'
+    });
+    properties.push({
+      label: 'Runtime adapter',
+      value: runtimeAdapter.mode === 'direct' ? `${runtimeAdapter.adapterId} (${getProviderDriverLabel(runtimeAdapter.adapterDriver)})` : `${runtimeAdapter.adapterId} (${getProviderDriverLabel(runtimeAdapter.adapterDriver)} fallback: ${runtimeAdapter.note})`
+    });
+    const providerModel = getSettingsForSource('userSettings')?.model ?? configuredProvider.provider.defaultModel;
+    if (providerModel) {
+      const contextWindow = getDefaultContextWindowForConfiguredProviderModel(providerModel);
+      const autoCompactLimit = getAutoCompactTokenLimitForConfiguredProviderModel(providerModel);
+      if (contextWindow !== undefined) {
+        properties.push({
+          label: 'Provider context window',
+          value: contextWindow.toLocaleString()
+        });
+      }
+      if (autoCompactLimit !== undefined) {
+        properties.push({
+          label: 'Provider auto-compact trigger',
+          value: autoCompactLimit.toLocaleString()
+        });
+      }
+    }
+  }
   if (apiProvider !== 'firstParty') {
     const providerLabel = {
       bedrock: 'AWS Bedrock',

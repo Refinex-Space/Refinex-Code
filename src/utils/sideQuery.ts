@@ -1,10 +1,12 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import type { BetaToolUnion } from '@anthropic-ai/sdk/resources/beta/messages.js'
+import type {
+  BetaContentBlock,
+  BetaToolUnion,
+} from '@anthropic-ai/sdk/resources/beta/messages.js'
 import {
   getLastApiCompletionTimestamp,
   setLastApiCompletionTimestamp,
 } from '../bootstrap/state.js'
-import { STRUCTURED_OUTPUTS_BETA_HEADER } from '../constants/betas.js'
 import type { QuerySource } from '../constants/querySource.js'
 import {
   getAttributionHeader,
@@ -12,11 +14,16 @@ import {
 } from '../constants/system.js'
 import { logEvent } from '../services/analytics/index.js'
 import type { AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from '../services/analytics/metadata.js'
-import { getAPIMetadata } from '../services/api/claude.js'
-import { getAnthropicClient } from '../services/api/client.js'
-import { getModelBetas, modelSupportsStructuredOutputs } from './betas.js'
+import { queryModelWithoutStreaming } from '../services/api/providerAdapter.js'
+import { getEmptyToolPermissionContext } from '../Tool.js'
 import { computeFingerprint } from './fingerprint.js'
+import {
+  createAssistantMessage,
+  createUserMessage,
+  extractTextContent,
+} from './messages.js'
 import { normalizeModelStringForAPI } from './model/model.js'
+import { asSystemPrompt } from './systemPromptType.js'
 
 type MessageParam = Anthropic.MessageParam
 type TextBlockParam = Anthropic.TextBlockParam
@@ -119,28 +126,16 @@ export async function sideQuery(opts: SideQueryOptions): Promise<BetaMessage> {
     temperature,
     thinking,
     stop_sequences,
+    querySource,
   } = opts
-
-  const client = await getAnthropicClient({
-    maxRetries,
-    model,
-    source: 'side_query',
-  })
-  const betas = [...getModelBetas(model)]
-  // Add structured-outputs beta if using output_format and provider supports it
-  if (
-    output_format &&
-    modelSupportsStructuredOutputs(model) &&
-    !betas.includes(STRUCTURED_OUTPUTS_BETA_HEADER)
-  ) {
-    betas.push(STRUCTURED_OUTPUTS_BETA_HEADER)
-  }
 
   // Extract first user message text for fingerprint
   const messageText = extractFirstUserMessageText(messages)
 
   // Compute fingerprint for OAuth attribution
-  const fingerprint = computeFingerprint(messageText, MACRO.VERSION)
+  const macroVersion =
+    (globalThis as { MACRO?: { VERSION?: string } }).MACRO?.VERSION ?? 'dev'
+  const fingerprint = computeFingerprint(messageText, macroVersion)
   const attributionHeader = getAttributionHeader(fingerprint)
 
   // Build system as array to keep attribution header in its own block
@@ -166,57 +161,92 @@ export async function sideQuery(opts: SideQueryOptions): Promise<BetaMessage> {
         : []),
   ].filter((block): block is TextBlockParam => block !== null)
 
-  let thinkingConfig: BetaThinkingConfigParam | undefined
-  if (thinking === false) {
-    thinkingConfig = { type: 'disabled' }
-  } else if (thinking !== undefined) {
-    thinkingConfig = {
-      type: 'enabled',
-      budget_tokens: Math.min(thinking, max_tokens - 1),
-    }
-  }
+  const convertedMessages = messages.map(message =>
+    message.role === 'assistant'
+      ? createAssistantMessage({
+          content:
+            typeof message.content === 'string'
+              ? message.content
+              : (message.content as BetaContentBlock[]),
+        })
+      : createUserMessage({
+          content:
+            typeof message.content === 'string'
+              ? message.content
+              : (message.content as Array<{
+                  type: string
+                  text?: string
+                  [key: string]: unknown
+                }>),
+        }),
+  )
+
+  const thinkingConfig: BetaThinkingConfigParam | { budgetTokens: number } =
+    thinking === false
+      ? { type: 'disabled' }
+      : thinking !== undefined
+        ? {
+            type: 'enabled',
+            budgetTokens: Math.min(thinking, max_tokens - 1),
+          }
+        : { type: 'disabled' }
 
   const normalizedModel = normalizeModelStringForAPI(model)
   const start = Date.now()
-  // biome-ignore lint/plugin: this IS the wrapper that handles OAuth attribution
-  const response = await client.beta.messages.create(
-    {
+  const response = await queryModelWithoutStreaming({
+    messages: convertedMessages,
+    systemPrompt: asSystemPrompt(systemBlocks.map(block => block.text)),
+    thinkingConfig:
+      thinkingConfig.type === 'disabled'
+        ? { type: 'disabled' as const }
+        : {
+            type: 'enabled' as const,
+            budgetTokens: thinkingConfig.budgetTokens,
+          },
+    tools: [],
+    signal: signal ?? new AbortController().signal,
+    options: {
+      async getToolPermissionContext() {
+        return getEmptyToolPermissionContext()
+      },
       model: normalizedModel,
-      max_tokens,
-      system: systemBlocks,
-      messages,
-      ...(tools && { tools }),
-      ...(tool_choice && { tool_choice }),
-      ...(output_format && { output_config: { format: output_format } }),
-      ...(temperature !== undefined && { temperature }),
-      ...(stop_sequences && { stop_sequences }),
-      ...(thinkingConfig && { thinking: thinkingConfig }),
-      ...(betas.length > 0 && { betas }),
-      metadata: getAPIMetadata(),
-    },
-    { signal },
-  )
+      toolChoice: tool_choice as never,
+      isNonInteractiveSession: true,
+      hasAppendSystemPrompt: false,
+      extraToolSchemas: tools as BetaToolUnion[] | undefined,
+      querySource,
+      agents: [],
+      mcpTools: [],
+      maxOutputTokensOverride: max_tokens,
+      outputFormat: output_format,
+      temperatureOverride: temperature,
+      enablePromptCaching: false,
+    } as never,
+  })
 
-  const requestId =
-    (response as { _request_id?: string | null })._request_id ?? undefined
+  if (response.isApiErrorMessage) {
+    throw new Error(extractTextContent(response.message.content))
+  }
+
   const now = Date.now()
   const lastCompletion = getLastApiCompletionTimestamp()
   logEvent('tengu_api_success', {
     requestId:
-      requestId as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+      (response.requestId ??
+        undefined) as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
     querySource:
       opts.querySource as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
     model:
       normalizedModel as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-    inputTokens: response.usage.input_tokens,
-    outputTokens: response.usage.output_tokens,
-    cachedInputTokens: response.usage.cache_read_input_tokens ?? 0,
-    uncachedInputTokens: response.usage.cache_creation_input_tokens ?? 0,
+    inputTokens: response.message.usage.input_tokens,
+    outputTokens: response.message.usage.output_tokens,
+    cachedInputTokens: response.message.usage.cache_read_input_tokens ?? 0,
+    uncachedInputTokens: response.message.usage.cache_creation_input_tokens ?? 0,
     durationMsIncludingRetries: now - start,
     timeSinceLastApiCallMs:
       lastCompletion !== null ? now - lastCompletion : undefined,
   })
   setLastApiCompletionTimestamp(now)
 
-  return response
+  return response.message as BetaMessage
 }

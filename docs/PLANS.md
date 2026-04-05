@@ -1,19 +1,18 @@
 <!-- HARNESS:MANAGED FILE -->
 # Development Plans
 
-> Read this file before starting work so the current active plan and
+> Read this file before starting work so the current active plans and
 > priority are known.
 
 ## Current State
 
-- **Active plan**: none
+- **Active plans directory**: `docs/exec-plans/active/`
 - **Harness status**: maintained via `scripts/check_harness.py`
 - **Structural debt**: `docs/exec-plans/tech-debt-tracker.md`
 
-## Recently Completed Plans
+## Active Plan Entry Points
 
-- [Harness Bootstrap](docs/exec-plans/completed/2026-04-05-harness-bootstrap.md)
-- [ccc Global Install](docs/exec-plans/completed/2026-04-02-ccc-global-install.md)
+- No active plans
 
 ## Rules
 
