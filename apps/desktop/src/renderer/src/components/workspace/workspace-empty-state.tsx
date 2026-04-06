@@ -114,18 +114,18 @@ export function WorkspaceEmptyState({
               event.preventDefault();
               setPickerOpen((open) => !open);
             }}
-            className="group mt-2.5 inline-flex items-center gap-2 rounded-full px-0.5 py-0.5 text-black/42 transition-colors duration-150 hover:text-black/56 dark:text-[var(--color-fg)]/62 dark:hover:text-[var(--color-fg)]/84"
+            className="group mt-2.5 inline-flex items-center gap-2 rounded-full px-0.5 py-0.5 text-[var(--color-muted)] transition-colors duration-150 hover:text-[var(--color-fg)]"
             aria-label={activeWorktree ? `当前项目：${title}` : "选择项目"}
           >
             <span className="inline-flex items-center gap-1.5">
-              <span className="max-w-[min(30ch,calc(100vw-5rem))] truncate font-medium text-[clamp(2rem,3.8vw,2.65rem)] leading-none tracking-[-0.05em] text-black/42 transition-colors duration-150 group-hover:text-black/52 dark:text-[var(--color-fg)]/62 dark:group-hover:text-[var(--color-fg)]/84">
+              <span className="max-w-[min(30ch,calc(100vw-5rem))] truncate font-medium text-[clamp(2rem,3.8vw,2.65rem)] leading-none tracking-[-0.05em] text-[var(--color-muted)] transition-colors duration-150 group-hover:text-[var(--color-fg)]">
                 {title}
               </span>
               <span
                 className={cn(
-                  "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-transparent text-black/38 transition-[transform,color] duration-150 group-hover:text-black/56 dark:text-[var(--color-fg)]/58 dark:group-hover:text-[var(--color-fg)]/82",
+                  "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-transparent text-[var(--color-muted)] transition-[transform,color] duration-150 group-hover:text-[var(--color-fg)]",
                   pickerOpen &&
-                    "rotate-180 text-black/58 dark:text-[var(--color-fg)]/84",
+                    "rotate-180 text-[var(--color-fg)]",
                 )}
               >
                 <ChevronDown className="h-4.5 w-4.5" aria-hidden="true" />
@@ -137,18 +137,18 @@ export function WorkspaceEmptyState({
             side="bottom"
             align="center"
             sideOffset={8}
-            className="z-30 w-[min(19.75rem,calc(100vw-1.25rem))] overflow-hidden rounded-[16px] border border-black/8 bg-white p-0 shadow-[0_10px_26px_rgba(15,23,42,0.095)] outline-none dark:border-white/10 dark:bg-[rgba(19,22,29,0.96)] dark:shadow-[0_12px_28px_rgba(0,0,0,0.34)]"
+            className="z-30 w-[min(19.75rem,calc(100vw-1.25rem))] overflow-hidden rounded-[16px] border border-[var(--color-border)] bg-[var(--color-panel)] p-0 shadow-[var(--shadow-panel)] outline-none"
           >
             {worktrees.length > 0 ? (
               <>
-                <label className="flex items-center gap-2.5 px-3.5 pt-3.5 pb-2 text-[#768196] dark:text-[var(--color-muted)]">
+                <label className="flex items-center gap-2.5 px-3.5 pt-3.5 pb-2 text-[var(--color-muted)]">
                   <Search className="h-[15px] w-[15px] shrink-0" aria-hidden="true" />
                   <input
                     ref={searchInputRef}
                     value={query}
                     onChange={handleQueryChange}
                     placeholder="Search projects"
-                    className="min-w-0 flex-1 bg-transparent text-[12.75px] leading-5 text-[var(--color-fg)] outline-none placeholder:text-[#8f99aa] dark:placeholder:text-[var(--color-muted)]"
+                    className="min-w-0 flex-1 bg-transparent text-[12.75px] leading-5 text-[var(--color-fg)] outline-none placeholder:text-[var(--color-muted)]"
                   />
                 </label>
 
@@ -163,12 +163,12 @@ export function WorkspaceEmptyState({
                           className={cn(
                             "group flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-left transition-colors duration-150",
                             worktree.isActive
-                              ? "bg-[rgba(15,23,42,0.055)] dark:bg-[rgba(255,255,255,0.08)]"
-                              : "hover:bg-[rgba(15,23,42,0.055)] dark:hover:bg-[rgba(255,255,255,0.08)]",
+                              ? "bg-[var(--color-surface-strong)]"
+                              : "hover:bg-[var(--color-surface)]",
                           )}
                         >
                           <Folder
-                            className="h-[15px] w-[15px] shrink-0 text-[#6b7688] transition-colors duration-150 group-hover:text-[var(--color-fg)]/86 dark:text-[var(--color-muted)] dark:group-hover:text-[var(--color-fg)]/88"
+                            className="h-[15px] w-[15px] shrink-0 text-[var(--color-muted)] transition-colors duration-150 group-hover:text-[var(--color-fg)]"
                             aria-hidden="true"
                           />
                           <span className="min-w-0 flex-1 truncate font-medium text-[12.75px] leading-5 text-[var(--color-fg)]">
@@ -198,14 +198,14 @@ export function WorkspaceEmptyState({
               </div>
             )}
 
-            <div className="border-t border-black/8 px-1.5 pt-1.5 pb-1 dark:border-white/10">
+            <div className="border-t border-[var(--color-border)] px-1.5 pt-1.5 pb-1">
               <button
                 type="button"
                 onClick={handleAddProject}
-                className="group flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-left transition-colors duration-150 hover:bg-[rgba(15,23,42,0.055)] dark:hover:bg-[rgba(255,255,255,0.08)]"
+                className="group flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-left transition-colors duration-150 hover:bg-[var(--color-surface)]"
               >
                 <FolderPlus
-                  className="h-[15px] w-[15px] shrink-0 text-[#6b7688] transition-colors duration-150 group-hover:text-[var(--color-fg)]/86 dark:text-[var(--color-muted)] dark:group-hover:text-[var(--color-fg)]/88"
+                  className="h-[15px] w-[15px] shrink-0 text-[var(--color-muted)] transition-colors duration-150 group-hover:text-[var(--color-fg)]"
                   aria-hidden="true"
                 />
                 <span className="font-medium text-[12.75px] leading-5 text-[var(--color-fg)]">

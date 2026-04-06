@@ -18,15 +18,7 @@ export function WorkspaceHome({
   onSelectWorktree,
 }: WorkspaceHomeProps) {
   return (
-    <div className="relative flex h-full min-h-0 justify-center overflow-hidden px-4">
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at top, rgba(96,165,250,0.16), transparent 34%), radial-gradient(circle at bottom left, rgba(52,211,153,0.12), transparent 28%)",
-        }}
-      />
-
+    <div className="relative flex h-full min-h-0 justify-center overflow-hidden bg-[var(--color-bg)] px-4">
       <div className="relative mx-auto flex h-full w-full max-w-[960px] flex-col items-center pb-6">
         <WorkspaceEmptyState
           activeWorktree={activeWorktree}

@@ -55,7 +55,7 @@ export function WorkspaceComposer({
 
   return (
     <div className="w-full max-w-[920px]">
-      <div className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-panel)] p-2 shadow-[0_1px_0_rgba(255,255,255,0.58)_inset,0_18px_42px_rgba(15,23,42,0.08),0_4px_14px_rgba(15,23,42,0.04)] backdrop-blur-xl">
+      <div className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-panel)] p-2 backdrop-blur-xl">
         <div className="px-3 pt-1">
           <textarea
             ref={textareaRef}

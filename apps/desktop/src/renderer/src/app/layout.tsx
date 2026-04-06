@@ -139,14 +139,6 @@ export function Layout() {
 
   return (
     <div className="relative flex h-screen overflow-hidden bg-[var(--color-bg)] text-[var(--color-fg)]">
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at top left, rgba(52,211,153,0.18), transparent 32%), radial-gradient(circle at top right, rgba(96,165,250,0.18), transparent 30%), linear-gradient(180deg, transparent, rgba(15,23,42,0.12))",
-        }}
-      />
-
       <motion.aside
         initial={false}
         animate={{ width: sidebarOpen ? sidebarWidth : 0 }}
@@ -155,7 +147,7 @@ export function Layout() {
             ? { duration: 0 }
             : { duration: 0.2, ease: "easeInOut" }
         }
-        className="relative z-10 shrink-0 overflow-hidden border-r border-[var(--color-border)] bg-[var(--color-sidebar)] backdrop-blur-2xl"
+        className="relative z-10 shrink-0 overflow-hidden border-r border-[var(--color-border)] bg-[var(--color-sidebar)]"
       >
         <div className="h-[var(--titlebar-height)]" />
         <WorkspaceSidebar
@@ -176,7 +168,7 @@ export function Layout() {
         ) : null}
       </motion.aside>
 
-      <section className="relative z-10 flex min-w-0 flex-1 flex-col">
+      <section className="relative z-10 flex min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
         <header
           className="flex h-[var(--titlebar-height)] items-center justify-between gap-4 px-5"
           data-window-drag-region
