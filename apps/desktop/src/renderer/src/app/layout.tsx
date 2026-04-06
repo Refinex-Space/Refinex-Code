@@ -66,7 +66,7 @@ export function Layout() {
     openWorkspace,
     revealWorkspace,
     selectWorktree,
-    prepareSession,
+    createSession,
     selectSession,
     removeSession,
     removeWorktree,
@@ -179,7 +179,7 @@ export function Layout() {
             onOpenSettings={() => openSettings("appearance")}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
             onSelectWorktree={selectWorktree}
-            onPrepareSession={prepareSession}
+            onCreateSession={createSession}
             onSelectSession={selectSession}
             onRemoveSession={removeSession}
             onRemoveWorktree={removeWorktree}
@@ -340,7 +340,7 @@ export function Layout() {
       <CommandPalette
         onOpenWorkspace={handleOpenWorkspace}
         onRevealWorkspace={handleRevealWorkspace}
-        onPrepareSession={prepareSession}
+        onCreateSession={createSession}
         onSelectWorktree={selectWorktree}
         onSelectSession={selectSession}
       />

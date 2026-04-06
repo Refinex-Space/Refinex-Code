@@ -316,8 +316,8 @@ export function createWorktreeStateStore({
     return createHash("sha1").update(worktreePath).digest("hex").slice(0, 12);
   }
 
-  function buildDefaultSessionTitle(sessionCount: number) {
-    return `Thread ${String(sessionCount + 1).padStart(2, "0")}`;
+  function buildDefaultSessionTitle() {
+    return "新线程";
   }
 
   function openWorktree(projectPath: string) {
@@ -397,7 +397,7 @@ export function createWorktreeStateStore({
       version: SIDEBAR_SCHEMA_VERSION,
       id: sessionId,
       worktreeId,
-      title: title?.trim() || buildDefaultSessionTitle(sessions.length),
+      title: title?.trim() || buildDefaultSessionTitle(),
       status: "idle",
       createdAt: now,
       updatedAt: now,

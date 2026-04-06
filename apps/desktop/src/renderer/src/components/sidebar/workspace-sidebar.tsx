@@ -31,7 +31,7 @@ interface WorkspaceSidebarProps {
   onOpenSettings: () => void;
   onOpenCommandPalette: () => void;
   onSelectWorktree: (worktreeId: string) => Promise<unknown>;
-  onPrepareSession: (worktreeId: string) => Promise<unknown>;
+  onCreateSession: (worktreeId: string) => Promise<unknown>;
   onSelectSession: (worktreeId: string, sessionId: string) => Promise<unknown>;
   onRemoveSession: (worktreeId: string, sessionId: string) => Promise<unknown>;
   onRemoveWorktree: (worktreeId: string) => Promise<unknown>;
@@ -45,7 +45,7 @@ export function WorkspaceSidebar({
   onOpenSettings,
   onOpenCommandPalette,
   onSelectWorktree,
-  onPrepareSession,
+  onCreateSession,
   onSelectSession,
   onRemoveSession,
   onRemoveWorktree,
@@ -85,7 +85,7 @@ export function WorkspaceSidebar({
             onClick={() => {
               onShowWorkspace();
               if (activeWorktree) {
-                runAction(() => onPrepareSession(activeWorktree.id));
+                runAction(() => onCreateSession(activeWorktree.id));
                 return;
               }
 
@@ -152,8 +152,9 @@ export function WorkspaceSidebar({
             </div>
           ) : null}
 
-          {worktrees.length > 0
-            ? worktrees.map((worktree) => {
+          {worktrees.length > 0 ? (
+            <div className="space-y-1">
+              {worktrees.map((worktree) => {
                 const isCollapsed = collapsedWorktrees[worktree.id] ?? false;
                 const activeSessionInProject = worktree.sessions.some(
                   (session) => session.id === activeSessionId,
@@ -231,7 +232,7 @@ export function WorkspaceSidebar({
                         icon={SquarePen}
                         onClick={() => {
                           onShowWorkspace();
-                          runAction(() => onPrepareSession(worktree.id));
+                          runAction(() => onCreateSession(worktree.id));
                         }}
                       />
                       <SidebarIconButton
@@ -281,8 +282,9 @@ export function WorkspaceSidebar({
                     </AnimatePresence>
                   </div>
                 );
-              })
-            : null}
+              })}
+            </div>
+          ) : null}
         </div>
       </ScrollArea>
 

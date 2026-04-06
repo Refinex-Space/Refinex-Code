@@ -91,6 +91,18 @@ export function useDesktopShell() {
     return snapshot;
   }, [pushSnapshot]);
 
+  const createSession = useCallback(
+    async (worktreeId: string, title?: string | null) => {
+      const snapshot = await window.desktopApp.createSession({
+        worktreeId,
+        title: title ?? null,
+      });
+      pushSnapshot(snapshot);
+      return snapshot;
+    },
+    [pushSnapshot],
+  );
+
   const selectSession = useCallback(async (worktreeId: string, sessionId: string) => {
     const snapshot = await window.desktopApp.selectSession(worktreeId, sessionId);
     pushSnapshot(snapshot);
@@ -178,6 +190,7 @@ export function useDesktopShell() {
     selectWorktree,
     removeWorktree,
     prepareSession,
+    createSession,
     selectSession,
     removeSession,
     revealWorkspace,

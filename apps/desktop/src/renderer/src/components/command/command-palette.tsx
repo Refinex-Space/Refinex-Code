@@ -21,7 +21,7 @@ import { getNextThemeLabel, useUIStore } from "@renderer/stores/ui";
 interface CommandPaletteProps {
   onOpenWorkspace: () => Promise<unknown>;
   onRevealWorkspace: (workspacePath: string) => Promise<unknown>;
-  onPrepareSession: (worktreeId: string) => Promise<unknown>;
+  onCreateSession: (worktreeId: string) => Promise<unknown>;
   onSelectWorktree: (worktreeId: string) => Promise<unknown>;
   onSelectSession: (worktreeId: string, sessionId: string) => Promise<unknown>;
 }
@@ -38,7 +38,7 @@ interface CommandItem {
 export function CommandPalette({
   onOpenWorkspace,
   onRevealWorkspace,
-  onPrepareSession,
+  onCreateSession,
   onSelectWorktree,
   onSelectSession,
 }: CommandPaletteProps) {
@@ -103,7 +103,7 @@ export function CommandPalette({
       keywords: ["session", "thread", "create"],
       shortcut: "cmd+shift+n",
       group: "Session",
-      run: () => onPrepareSession(activeWorktree.id),
+      run: () => onCreateSession(activeWorktree.id),
     });
   }
 

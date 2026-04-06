@@ -6,6 +6,7 @@ import {
   useUIStore,
 } from "@renderer/stores/ui";
 import { emptySidebarState } from "@renderer/stores/worktree";
+import type { SidebarStateSnapshot } from "../../../shared/contracts";
 
 describe("desktop shell", () => {
   it("renders the shell frame and bootstrap content", async () => {
@@ -25,7 +26,7 @@ describe("desktop shell", () => {
   });
 
   it("renders persisted worktrees and threads in the sidebar", async () => {
-    vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue({
+    const sidebarSnapshot: SidebarStateSnapshot = {
       ...emptySidebarState,
       storageRoot:
         "/Users/test/Library/Application Support/RWork/sidebar-state",
@@ -69,6 +70,33 @@ describe("desktop shell", () => {
               storagePath:
                 "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha/sessions/thread-1.json",
             },
+          ],
+        },
+      ],
+    };
+    vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue(sidebarSnapshot);
+    vi.mocked(window.desktopApp.createSession).mockResolvedValue({
+      ...sidebarSnapshot,
+      activeSessionId: "thread-3",
+      worktrees: [
+        {
+          ...sidebarSnapshot.worktrees[0]!,
+          updatedAt: "2026-04-06T01:00:00.000Z",
+          lastOpenedAt: "2026-04-06T01:00:00.000Z",
+          lastSessionId: "thread-3",
+          sessions: [
+            {
+              id: "thread-3",
+              worktreeId: "alpha",
+              title: "新线程",
+              status: "idle",
+              createdAt: "2026-04-06T01:00:00.000Z",
+              updatedAt: "2026-04-06T01:00:00.000Z",
+              lastOpenedAt: "2026-04-06T01:00:00.000Z",
+              storagePath:
+                "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha/sessions/thread-3.json",
+            },
+            ...sidebarSnapshot.worktrees[0]!.sessions,
           ],
         },
       ],
@@ -124,6 +152,16 @@ describe("desktop shell", () => {
       expect(screen.getByRole("button", { name: "选择模型" })).toHaveTextContent("Haiku 4.5");
       expect(screen.getByRole("button", { name: "选择推理强度" })).toHaveTextContent("N/A");
       expect(screen.getByRole("button", { name: "选择推理强度" })).toBeDisabled();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "新线程" }));
+
+    await waitFor(() => {
+      expect(window.desktopApp.createSession).toHaveBeenCalledWith({
+        worktreeId: "alpha",
+        title: null,
+      });
+      expect(screen.getAllByText("新线程").length).toBeGreaterThan(0);
     });
 
     fireEvent.click(projectTrigger);
