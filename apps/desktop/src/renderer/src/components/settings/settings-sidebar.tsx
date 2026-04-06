@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowLeft, PlugZap, SunMedium } from "lucide-react";
+import { ArrowLeft, Blocks, PlugZap, SunMedium } from "lucide-react";
 import { ScrollArea } from "@renderer/components/ui/scroll-area";
 import { cn } from "@renderer/lib/cn";
 import type { SettingsSection } from "@renderer/stores/ui";
@@ -47,6 +47,12 @@ export function SettingsSidebar({
             label="供应商"
             icon={PlugZap}
             onClick={() => onSelectSection("provider")}
+          />
+          <SettingsNavItem
+            active={activeSection === "mcp"}
+            label="MCP 服务器"
+            icon={Blocks}
+            onClick={() => onSelectSection("mcp")}
           />
         </nav>
       </ScrollArea>

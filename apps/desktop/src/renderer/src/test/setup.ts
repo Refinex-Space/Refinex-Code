@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { beforeEach, vi } from "vitest";
 import type { DesktopBridge } from "../../../shared/contracts";
 import { DEFAULT_APPEARANCE_SETTINGS } from "../../../shared/appearance-settings";
+import type { DesktopMcpSettingsSnapshot } from "../../../shared/mcp-settings";
 import type { DesktopProviderSettingsSnapshot } from "../../../shared/provider-settings";
 import { useUIStore } from "@renderer/stores/ui";
 import { emptySidebarState, useWorktreeStore } from "@renderer/stores/worktree";
@@ -128,6 +129,40 @@ const defaultProviderSettings: DesktopProviderSettingsSnapshot = {
   ],
 };
 
+const defaultMcpSettings: DesktopMcpSettingsSnapshot = {
+  storagePath: "/Users/test/.claude.json",
+  servers: [
+    {
+      name: "context7",
+      enabled: true,
+      transport: "stdio",
+      transportLabel: "STDIO",
+      summary: "npx -y @upstash/context7-mcp",
+      command: "npx",
+      args: ["-y", "@upstash/context7-mcp"],
+      env: [{ key: "API_KEY", value: "ctx7sk-test" }],
+    },
+  ],
+  unsupportedServers: [],
+  transportOptions: [
+    {
+      value: "stdio",
+      label: "STDIO",
+      description: "通过本地命令启动 MCP 进程。",
+    },
+    {
+      value: "http",
+      label: "流式 HTTP",
+      description: "连接支持 Streamable HTTP 的远程 MCP 服务。",
+    },
+    {
+      value: "sse",
+      label: "SSE",
+      description: "兼容部分仍使用 SSE 的远程 MCP 服务。",
+    },
+  ],
+};
+
 const desktopBridgeMock: DesktopBridge = {
   getAppInfo: vi.fn().mockResolvedValue({
     appName: "RWork",
@@ -181,6 +216,56 @@ const desktopBridgeMock: DesktopBridge = {
       },
     };
   }),
+  getMcpSettings: vi.fn().mockResolvedValue(defaultMcpSettings),
+  saveMcpServer: vi.fn().mockImplementation(async (settings) => {
+    if (settings.transport === "stdio") {
+      return {
+        ...defaultMcpSettings,
+        servers: [
+          {
+            name: settings.name,
+            enabled: settings.enabled,
+            transport: "stdio",
+            transportLabel: "STDIO",
+            summary: [settings.command, ...settings.args].join(" "),
+            command: settings.command,
+            args: settings.args,
+            env: settings.env,
+          },
+        ],
+      };
+    }
+
+    return {
+      ...defaultMcpSettings,
+      servers: [
+        {
+          name: settings.name,
+          enabled: settings.enabled,
+          transport: settings.transport,
+          transportLabel: settings.transport === "http" ? "流式 HTTP" : "SSE",
+          summary: settings.url,
+          url: settings.url,
+          headers: settings.headers,
+        },
+      ],
+    };
+  }),
+  removeMcpServer: vi.fn().mockResolvedValue({
+    ...defaultMcpSettings,
+    servers: [],
+  }),
+  toggleMcpServer: vi.fn().mockImplementation(async (settings) => ({
+    ...defaultMcpSettings,
+    servers: defaultMcpSettings.servers.map((server) =>
+      server.name === settings.name
+        ? {
+            ...server,
+            enabled: settings.enabled,
+          }
+        : server,
+    ),
+  })),
   openWorktree: vi.fn().mockResolvedValue(defaultSidebarState),
   pickAndOpenWorktree: vi.fn().mockResolvedValue(null),
   selectWorktree: vi.fn().mockResolvedValue(defaultSidebarState),
@@ -273,6 +358,62 @@ if (typeof window !== "undefined") {
           },
         };
       },
+    );
+    vi.mocked(window.desktopApp.getMcpSettings).mockResolvedValue(
+      defaultMcpSettings,
+    );
+    vi.mocked(window.desktopApp.saveMcpServer).mockImplementation(
+      async (settings) => {
+        if (settings.transport === "stdio") {
+          return {
+            ...defaultMcpSettings,
+            servers: [
+              {
+                name: settings.name,
+                enabled: settings.enabled,
+                transport: "stdio",
+                transportLabel: "STDIO",
+                summary: [settings.command, ...settings.args].join(" "),
+                command: settings.command,
+                args: settings.args,
+                env: settings.env,
+              },
+            ],
+          };
+        }
+
+        return {
+          ...defaultMcpSettings,
+          servers: [
+            {
+              name: settings.name,
+              enabled: settings.enabled,
+              transport: settings.transport,
+              transportLabel: settings.transport === "http" ? "流式 HTTP" : "SSE",
+              summary: settings.url,
+              url: settings.url,
+              headers: settings.headers,
+            },
+          ],
+        };
+      },
+    );
+    vi.mocked(window.desktopApp.removeMcpServer).mockResolvedValue({
+      ...defaultMcpSettings,
+      servers: [],
+    });
+    vi.mocked(window.desktopApp.toggleMcpServer).mockImplementation(
+      async (settings) => ({
+        ...defaultMcpSettings,
+        servers: defaultMcpSettings.servers.map((server) =>
+          server.name === settings.name
+            ? {
+                ...server,
+                enabled: settings.enabled,
+              }
+            : server,
+        ),
+      }),
     );
     vi.mocked(window.desktopApp.openWorktree).mockResolvedValue(defaultSidebarState);
     vi.mocked(window.desktopApp.pickAndOpenWorktree).mockResolvedValue(null);

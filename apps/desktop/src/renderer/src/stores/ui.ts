@@ -34,7 +34,7 @@ export type {
   ThemeMode,
 } from "../../../shared/appearance-settings";
 export type ShellView = "workspace" | "settings";
-export type SettingsSection = "appearance" | "provider";
+export type SettingsSection = "appearance" | "provider" | "mcp";
 
 export const DEFAULT_SIDEBAR_WIDTH = 258;
 export const MIN_SIDEBAR_WIDTH = 220;

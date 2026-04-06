@@ -4,6 +4,9 @@ import type {
   AppearanceSettingsData,
   AppearanceSettingsSnapshot,
   DesktopBridge,
+  DesktopMcpServerSaveInput,
+  DesktopMcpServerToggleInput,
+  DesktopMcpSettingsSnapshot,
   DesktopProviderSettingsSaveInput,
   DesktopProviderSettingsSnapshot,
   SessionCreateInput,
@@ -25,6 +28,14 @@ const desktopBridge: DesktopBridge = {
     ipcRenderer.invoke("provider-settings:get") as Promise<DesktopProviderSettingsSnapshot>,
   saveProviderSettings: (settings: DesktopProviderSettingsSaveInput) =>
     ipcRenderer.invoke("provider-settings:save", settings) as Promise<DesktopProviderSettingsSnapshot>,
+  getMcpSettings: () =>
+    ipcRenderer.invoke("mcp-settings:get") as Promise<DesktopMcpSettingsSnapshot>,
+  saveMcpServer: (settings: DesktopMcpServerSaveInput) =>
+    ipcRenderer.invoke("mcp-settings:save", settings) as Promise<DesktopMcpSettingsSnapshot>,
+  removeMcpServer: (name: string) =>
+    ipcRenderer.invoke("mcp-settings:remove", name) as Promise<DesktopMcpSettingsSnapshot>,
+  toggleMcpServer: (settings: DesktopMcpServerToggleInput) =>
+    ipcRenderer.invoke("mcp-settings:toggle", settings) as Promise<DesktopMcpSettingsSnapshot>,
   openWorktree: (projectPath) =>
     ipcRenderer.invoke("sidebar:open-worktree", projectPath) as Promise<SidebarStateSnapshot>,
   pickAndOpenWorktree: () =>

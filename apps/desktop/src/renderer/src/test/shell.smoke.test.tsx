@@ -305,6 +305,58 @@ describe("desktop shell", () => {
     });
   });
 
+  it("renders MCP settings and saves a new stdio server", async () => {
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "设置" }));
+    fireEvent.click(screen.getByRole("button", { name: "MCP 服务器" }));
+
+    expect(await screen.findByRole("heading", { name: "MCP 服务器" })).toBeInTheDocument();
+    expect(screen.getByText("自定义服务器")).toBeInTheDocument();
+    expect(screen.getByText("context7")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("switch", { name: "context7 启用状态" }));
+
+    await waitFor(() => {
+      expect(window.desktopApp.toggleMcpServer).toHaveBeenCalledWith({
+        name: "context7",
+        enabled: false,
+      });
+    });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "添加服务器" })[0]);
+    expect(await screen.findByText("添加服务器")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("MCP 服务器名称"), {
+      target: { value: "pencil" },
+    });
+    fireEvent.change(screen.getByLabelText("MCP 启动命令"), {
+      target: { value: "npx" },
+    });
+    fireEvent.change(screen.getByLabelText("MCP 启动参数"), {
+      target: { value: "-y\n@modelcontextprotocol/server-filesystem" },
+    });
+    fireEvent.change(screen.getAllByPlaceholderText("变量名")[0], {
+      target: { value: "ROOT_DIR" },
+    });
+    fireEvent.change(screen.getAllByPlaceholderText("变量值")[0], {
+      target: { value: "/tmp" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      expect(window.desktopApp.saveMcpServer).toHaveBeenCalledWith({
+        previousName: null,
+        name: "pencil",
+        enabled: true,
+        transport: "stdio",
+        command: "npx",
+        args: ["-y", "@modelcontextprotocol/server-filesystem"],
+        env: [{ key: "ROOT_DIR", value: "/tmp" }],
+      });
+    });
+  });
+
   it("toggles terminal with cmd+t", async () => {
     render(<App />);
     const header = screen.getByRole("banner");

@@ -6,6 +6,9 @@ import type {
   AppInfo,
   AppearanceSettingsData,
   AppearanceSettingsSnapshot,
+  DesktopMcpServerSaveInput,
+  DesktopMcpServerToggleInput,
+  DesktopMcpSettingsSnapshot,
   DesktopProviderSettingsSaveInput,
   DesktopProviderSettingsSnapshot,
   SessionCreateInput,
@@ -16,6 +19,7 @@ import type {
   TerminalSessionInfo,
 } from "../shared/contracts";
 import { createAppearanceSettingsStore } from "./appearance-settings-store";
+import { createMcpSettingsStore } from "./mcp-settings-store";
 import { createProviderSettingsStore } from "./provider-settings-store";
 import { createWorktreeStateStore } from "./worktree-state-store";
 
@@ -33,6 +37,7 @@ let mainWindow: BrowserWindow | null = null;
 let worktreeStateStore: ReturnType<typeof createWorktreeStateStore> | null = null;
 let appearanceSettingsStore: ReturnType<typeof createAppearanceSettingsStore> | null = null;
 let providerSettingsStore: ReturnType<typeof createProviderSettingsStore> | null = null;
+let mcpSettingsStore: ReturnType<typeof createMcpSettingsStore> | null = null;
 
 function resolveAppIconPath() {
   const candidates = [
@@ -218,6 +223,12 @@ function getProviderSettingsStore() {
   return providerSettingsStore;
 }
 
+function getMcpSettingsStore() {
+  mcpSettingsStore ??= createMcpSettingsStore();
+
+  return mcpSettingsStore;
+}
+
 function registerIpcHandlers() {
   ipcMain.handle("app:info", () => buildAppInfo());
   ipcMain.handle("appearance-settings:get", (): AppearanceSettingsSnapshot => {
@@ -236,6 +247,24 @@ function registerIpcHandlers() {
     "provider-settings:save",
     (_event, settings: DesktopProviderSettingsSaveInput): DesktopProviderSettingsSnapshot => {
       return getProviderSettingsStore().save(settings).snapshot;
+    },
+  );
+  ipcMain.handle("mcp-settings:get", (): DesktopMcpSettingsSnapshot => {
+    return getMcpSettingsStore().getSnapshot();
+  });
+  ipcMain.handle(
+    "mcp-settings:save",
+    (_event, settings: DesktopMcpServerSaveInput): DesktopMcpSettingsSnapshot => {
+      return getMcpSettingsStore().save(settings);
+    },
+  );
+  ipcMain.handle("mcp-settings:remove", (_event, name: string): DesktopMcpSettingsSnapshot => {
+    return getMcpSettingsStore().remove(name);
+  });
+  ipcMain.handle(
+    "mcp-settings:toggle",
+    (_event, settings: DesktopMcpServerToggleInput): DesktopMcpSettingsSnapshot => {
+      return getMcpSettingsStore().toggle(settings);
     },
   );
 

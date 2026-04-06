@@ -6,6 +6,11 @@ import type {
   DesktopProviderSettingsSaveInput,
   DesktopProviderSettingsSnapshot,
 } from "./provider-settings";
+import type {
+  DesktopMcpServerSaveInput,
+  DesktopMcpServerToggleInput,
+  DesktopMcpSettingsSnapshot,
+} from "./mcp-settings";
 export type {
   AppearanceSettingsData,
   AppearanceSettingsSnapshot,
@@ -14,6 +19,11 @@ export type {
   DesktopProviderSettingsSaveInput,
   DesktopProviderSettingsSnapshot,
 } from "./provider-settings";
+export type {
+  DesktopMcpServerSaveInput,
+  DesktopMcpServerToggleInput,
+  DesktopMcpSettingsSnapshot,
+} from "./mcp-settings";
 
 export interface AppInfo {
   appName: string;
@@ -95,6 +105,14 @@ export interface DesktopBridge {
   saveProviderSettings: (
     settings: DesktopProviderSettingsSaveInput,
   ) => Promise<DesktopProviderSettingsSnapshot>;
+  getMcpSettings: () => Promise<DesktopMcpSettingsSnapshot>;
+  saveMcpServer: (
+    settings: DesktopMcpServerSaveInput,
+  ) => Promise<DesktopMcpSettingsSnapshot>;
+  removeMcpServer: (name: string) => Promise<DesktopMcpSettingsSnapshot>;
+  toggleMcpServer: (
+    settings: DesktopMcpServerToggleInput,
+  ) => Promise<DesktopMcpSettingsSnapshot>;
   openWorktree: (projectPath: string) => Promise<SidebarStateSnapshot>;
   pickAndOpenWorktree: () => Promise<SidebarStateSnapshot | null>;
   selectWorktree: (worktreeId: string) => Promise<SidebarStateSnapshot>;
