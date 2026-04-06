@@ -24,6 +24,9 @@ import type {
   TerminalDataPayload,
   TerminalExitPayload,
   TerminalSessionInfo,
+  VoiceDictationProgressPayload,
+  VoiceDictationTranscriptionInput,
+  VoiceDictationTranscriptionResult,
 } from "../shared/contracts";
 import { createAppearanceSettingsStore } from "./appearance-settings-store";
 import { createMcpSettingsStore } from "./mcp-settings-store";
@@ -42,6 +45,11 @@ import {
   replaceSkillFromArchive,
   uninstallSkillDirectory,
 } from "./skills-actions";
+import {
+  getVoiceDictationModelsRoot,
+  prepareVoiceDictation,
+  transcribeVoiceDictation,
+} from "./voice-dictation";
 import { createWorktreeStateStore } from "./worktree-state-store";
 
 interface TerminalSession {
@@ -99,7 +107,10 @@ function resolveDefaultWorkspacePath(): string | null {
   return candidate && isDirectory(candidate) ? candidate : null;
 }
 
-function emitToRenderer(channel: "terminal:data" | "terminal:exit", payload: TerminalDataPayload | TerminalExitPayload) {
+function emitToRenderer(
+  channel: "terminal:data" | "terminal:exit" | "voice-dictation:progress",
+  payload: TerminalDataPayload | TerminalExitPayload | VoiceDictationProgressPayload,
+) {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
@@ -539,6 +550,57 @@ function registerIpcHandlers() {
       };
     },
   );
+  ipcMain.handle("voice-dictation:prepare", async () => {
+    try {
+      return await prepareVoiceDictation(app.getPath("userData"), (payload) => {
+        emitToRenderer("voice-dictation:progress", payload);
+      });
+    } catch (error) {
+      emitToRenderer("voice-dictation:progress", {
+        stage: "error",
+        message: error instanceof Error ? error.message : "准备离线语音模型失败。",
+        percent: null,
+      });
+      throw error;
+    }
+  });
+  ipcMain.handle(
+    "voice-dictation:transcribe",
+    async (
+      _event,
+      input: VoiceDictationTranscriptionInput,
+    ): Promise<VoiceDictationTranscriptionResult> => {
+      try {
+        return await transcribeVoiceDictation(app.getPath("userData"), input, (payload) => {
+          emitToRenderer("voice-dictation:progress", payload);
+        });
+      } catch (error) {
+        emitToRenderer("voice-dictation:progress", {
+          stage: "error",
+          message: error instanceof Error ? error.message : "离线语音转写失败。",
+          percent: null,
+        });
+        throw error;
+      }
+    },
+  );
+  ipcMain.handle("voice-dictation:open-models-directory", async () => {
+    const modelsDirectory = getVoiceDictationModelsRoot(app.getPath("userData"));
+    if (!existsSync(modelsDirectory)) {
+      await dialog.showMessageBox({
+        type: "info",
+        buttons: ["知道了"],
+        defaultId: 0,
+        message: "模型目录尚未创建",
+        detail: modelsDirectory,
+      });
+      return;
+    }
+    const error = await shell.openPath(modelsDirectory);
+    if (error) {
+      throw new Error(error);
+    }
+  });
 
   ipcMain.handle("sidebar:open-worktree", (_event, projectPath: string): SidebarStateSnapshot => {
     return getWorktreeStateStore().openWorktree(projectPath);

@@ -21,6 +21,10 @@ import type {
   TerminalDataPayload,
   TerminalExitPayload,
   TerminalSessionInfo,
+  VoiceDictationAvailability,
+  VoiceDictationProgressPayload,
+  VoiceDictationTranscriptionInput,
+  VoiceDictationTranscriptionResult,
 } from "../shared/contracts";
 
 const desktopBridge: DesktopBridge = {
@@ -41,6 +45,25 @@ const desktopBridge: DesktopBridge = {
     ipcRenderer.invoke("skills:get-remote-catalog") as Promise<RemoteSkillCatalog>,
   installRemoteSkill: (skillId: string) =>
     ipcRenderer.invoke("skills:install-remote", skillId) as Promise<SkillMutationResult>,
+  prepareVoiceDictation: () =>
+    ipcRenderer.invoke("voice-dictation:prepare") as Promise<VoiceDictationAvailability>,
+  transcribeVoiceDictation: (input: VoiceDictationTranscriptionInput) =>
+    ipcRenderer.invoke("voice-dictation:transcribe", input) as Promise<VoiceDictationTranscriptionResult>,
+  openVoiceDictationModelsDirectory: () =>
+    ipcRenderer.invoke("voice-dictation:open-models-directory") as Promise<void>,
+  onVoiceDictationProgress: (listener) => {
+    const wrapped = (
+      _event: Electron.IpcRendererEvent,
+      payload: VoiceDictationProgressPayload,
+    ) => {
+      listener(payload);
+    };
+
+    ipcRenderer.on("voice-dictation:progress", wrapped);
+    return () => {
+      ipcRenderer.removeListener("voice-dictation:progress", wrapped);
+    };
+  },
   getAppearanceSettings: () =>
     ipcRenderer.invoke("appearance-settings:get") as Promise<AppearanceSettingsSnapshot>,
   saveAppearanceSettings: (settings: AppearanceSettingsData) =>

@@ -148,6 +148,45 @@ export interface RemoteSkillCatalog {
   fetchedAt: string;
 }
 
+export interface VoiceDictationAvailability {
+  available: boolean;
+  provider: "sherpa-onnx";
+  modelId: string;
+  modelLabel: string;
+  downloaded: boolean;
+  message: string | null;
+}
+
+export interface VoiceDictationTranscriptionInput {
+  samples: Float32Array;
+  sampleRate: number;
+}
+
+export interface VoiceDictationTranscriptionResult {
+  text: string;
+  modelLabel: string;
+  sampleRate: number;
+  sampleCount: number;
+  durationMs: number;
+}
+
+export type VoiceDictationProgressStage =
+  | "checking"
+  | "downloading"
+  | "extracting"
+  | "loading"
+  | "ready"
+  | "transcribing"
+  | "error";
+
+export interface VoiceDictationProgressPayload {
+  stage: VoiceDictationProgressStage;
+  message: string;
+  percent: number | null;
+  bytesReceived?: number;
+  bytesTotal?: number | null;
+}
+
 export interface TerminalCreateInput {
   sessionId: string;
   cwd?: string | null;
@@ -187,6 +226,14 @@ export interface DesktopBridge {
   uploadSkill: () => Promise<SkillUploadResult>;
   getRemoteSkillCatalog: () => Promise<RemoteSkillCatalog>;
   installRemoteSkill: (skillId: string) => Promise<SkillMutationResult>;
+  prepareVoiceDictation: () => Promise<VoiceDictationAvailability>;
+  transcribeVoiceDictation: (
+    input: VoiceDictationTranscriptionInput,
+  ) => Promise<VoiceDictationTranscriptionResult>;
+  openVoiceDictationModelsDirectory: () => Promise<void>;
+  onVoiceDictationProgress: (
+    listener: (payload: VoiceDictationProgressPayload) => void,
+  ) => () => void;
   getAppearanceSettings: () => Promise<AppearanceSettingsSnapshot>;
   saveAppearanceSettings: (
     settings: AppearanceSettingsData,

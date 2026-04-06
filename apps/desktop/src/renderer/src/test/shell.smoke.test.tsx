@@ -212,6 +212,79 @@ describe("desktop shell", () => {
     ).toBeInTheDocument();
   });
 
+  it("starts voice dictation and writes transcript into the composer", async () => {
+    vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue({
+      ...emptySidebarState,
+      storageRoot:
+        "/Users/test/Library/Application Support/RWork/sidebar-state",
+      activeWorktreeId: "alpha",
+      activeSessionId: "thread-2",
+      worktrees: [
+        {
+          id: "alpha",
+          label: "alpha",
+          sourcePath: "/Users/test/projects/alpha",
+          worktreePath: "/Users/test/projects/alpha",
+          gitRoot: "/Users/test/projects/alpha",
+          branch: "main",
+          isGitRepository: true,
+          storagePath:
+            "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha",
+          createdAt: "2026-04-06T00:00:00.000Z",
+          updatedAt: "2026-04-06T00:00:00.000Z",
+          lastOpenedAt: "2026-04-06T00:00:00.000Z",
+          lastSessionId: "thread-2",
+          sessions: [
+            {
+              id: "thread-2",
+              worktreeId: "alpha",
+              title: "新线程",
+              status: "idle",
+              createdAt: "2026-04-06T00:00:00.000Z",
+              updatedAt: "2026-04-06T00:00:00.000Z",
+              lastOpenedAt: "2026-04-06T00:00:00.000Z",
+              storagePath:
+                "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha/sessions/thread-2.json",
+            },
+          ],
+        },
+      ],
+    });
+
+    render(<App />);
+
+    const composer = await screen.findByLabelText("新线程");
+    fireEvent.keyDown(window, {
+      altKey: true,
+      code: "Space",
+      key: " ",
+    });
+
+    await waitFor(() => {
+      expect(window.desktopApp.prepareVoiceDictation).toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "结束语音输入" })).toBeInTheDocument();
+    });
+
+    const audioContextClass = window.AudioContext as unknown as {
+      lastProcessor: {
+        emit: (samples: number[]) => void;
+      } | null;
+    };
+
+    expect(audioContextClass.lastProcessor).not.toBeNull();
+
+    act(() => {
+      audioContextClass.lastProcessor?.emit(new Array(4096).fill(0.08));
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "结束语音输入" }));
+
+    await waitFor(() => {
+      expect(window.desktopApp.transcribeVoiceDictation).toHaveBeenCalled();
+      expect(composer).toHaveValue("帮我总结这个项目");
+    });
+  });
+
   it("opens the fullscreen settings panel and returns to the app", async () => {
     render(<App />);
 

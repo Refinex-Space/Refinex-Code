@@ -1,5 +1,5 @@
 import { DropdownMenu } from "@radix-ui/themes";
-import { ArrowUp, Brain, Check, Plus, Zap } from "lucide-react";
+import { ArrowUp, Brain, Check, Mic, MicOff, Plus, Zap } from "lucide-react";
 import {
   useEffect,
   useMemo,
@@ -8,6 +8,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { toast } from "sonner";
+import { useVoiceDictation } from "@renderer/hooks/use-voice-dictation";
 import { Tooltip } from "@renderer/components/ui/tooltip";
 import { cn } from "@renderer/lib/cn";
 import { useUIStore } from "@renderer/stores/ui";
@@ -111,6 +112,7 @@ export function WorkspaceComposer({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const hasDraft = value.trim().length > 0;
   const canSend = hasActiveSession && hasDraft;
+  const canUseDictation = hasActiveSession;
 
   const composerControlsHydrated = useUIStore(
     (state) => state.composerControlsHydrated,
@@ -227,6 +229,35 @@ export function WorkspaceComposer({
 
     toast.info("TODO：消息发送能力待接入");
   };
+
+  const applyValue = (nextValue: string) => {
+    setValue(nextValue);
+    requestAnimationFrame(() => {
+      handleInput();
+    });
+  };
+
+  const {
+    isSupported: supportsVoiceDictation,
+    isListening,
+    isPreparing: isPreparingDictation,
+    isTranscribing: isTranscribingDictation,
+    progress: dictationProgress,
+    lastError: dictationError,
+    retry: retryDictation,
+    openModelsDirectory,
+    toggle: toggleDictation,
+  } = useVoiceDictation({
+    enabled: canUseDictation,
+    value,
+    onChange: applyValue,
+    onUnsupported: () => {
+      toast.error("当前环境不支持本地语音听写。");
+    },
+    onError: (message) => {
+      toast.error(message);
+    },
+  });
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -354,27 +385,129 @@ export function WorkspaceComposer({
             />
           </div>
 
-          <Tooltip
-            content={
-              canSend ? "发送消息（TODO）" : "输入内容并选择线程后可发送"
-            }
-          >
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={!canSend}
-              className={cn(
-                "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-[background-color,color,box-shadow,transform] duration-200",
-                canSend
-                  ? "bg-[var(--color-fg)] text-[var(--color-bg)] shadow-[0_12px_24px_rgba(15,23,42,0.22)] hover:scale-[1.02]"
-                  : "bg-[var(--color-surface)] text-[var(--color-muted)] shadow-none",
-              )}
-              aria-label={canSend ? "发送消息（TODO）" : "发送消息不可用"}
+          <div className="flex items-center gap-2">
+            <Tooltip
+              content={
+                !canUseDictation
+                  ? "选择线程后可使用语音输入"
+                  : !supportsVoiceDictation
+                    ? "当前环境不支持本地语音听写"
+                    : dictationProgress?.message ??
+                      (isListening
+                        ? "结束听写（⌥Space）"
+                        : "离线语音输入（⌥Space）")
+              }
             >
-              <ArrowUp className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </Tooltip>
+              <button
+                type="button"
+                onClick={toggleDictation}
+                disabled={
+                  !canUseDictation ||
+                  !supportsVoiceDictation ||
+                  isPreparingDictation ||
+                  isTranscribingDictation
+                }
+                className={cn(
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-[background-color,color,box-shadow,transform] duration-200",
+                  isListening
+                    ? "bg-[rgba(239,68,68,0.12)] text-[#dc2626] shadow-[0_10px_22px_rgba(220,38,38,0.12)]"
+                    : "bg-[var(--color-surface)] text-[var(--color-muted)] hover:bg-[var(--color-surface-strong)] hover:text-[var(--color-fg)]",
+                  (!canUseDictation ||
+                    !supportsVoiceDictation ||
+                    isPreparingDictation ||
+                    isTranscribingDictation) &&
+                    "cursor-not-allowed opacity-60 hover:bg-[var(--color-surface)] hover:text-[var(--color-muted)]",
+                )}
+                aria-label={
+                  isListening
+                    ? "结束语音输入"
+                    : isPreparingDictation
+                      ? "正在准备语音输入"
+                      : isTranscribingDictation
+                        ? "正在转写语音输入"
+                        : "开始语音输入"
+                }
+              >
+                {isListening ? (
+                  <MicOff className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Mic className="h-4 w-4" aria-hidden="true" />
+                )}
+              </button>
+            </Tooltip>
+
+            <Tooltip
+              content={
+                canSend ? "发送消息（TODO）" : "输入内容并选择线程后可发送"
+              }
+            >
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={!canSend}
+                className={cn(
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-[background-color,color,box-shadow,transform] duration-200",
+                  canSend
+                    ? "bg-[var(--color-fg)] text-[var(--color-bg)] shadow-[0_12px_24px_rgba(15,23,42,0.22)] hover:scale-[1.02]"
+                    : "bg-[var(--color-surface)] text-[var(--color-muted)] shadow-none",
+                )}
+                aria-label={canSend ? "发送消息（TODO）" : "发送消息不可用"}
+              >
+                <ArrowUp className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </Tooltip>
+          </div>
         </div>
+        {dictationProgress && (isPreparingDictation || isTranscribingDictation) ? (
+          <div className="px-3 pb-1 pt-1">
+            <div className="rounded-[14px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
+              <div className="flex items-center justify-between gap-3 text-[11px] text-[var(--color-muted)]">
+                <span className="truncate">{dictationProgress.message}</span>
+                {typeof dictationProgress.percent === "number" ? (
+                  <span className="tabular-nums text-[var(--color-fg)]/70">
+                    {Math.round(dictationProgress.percent)}%
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--color-border)]/80">
+                <div
+                  className="h-full rounded-full bg-[var(--color-fg)]/70 transition-[width] duration-200"
+                  style={{
+                    width:
+                      typeof dictationProgress.percent === "number"
+                        ? `${Math.max(6, Math.min(100, dictationProgress.percent))}%`
+                        : "20%",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {dictationError && !isPreparingDictation && !isTranscribingDictation ? (
+          <div className="px-3 pb-1 pt-1">
+            <div className="flex flex-wrap items-center gap-2 rounded-[14px] border border-[rgba(239,68,68,0.2)] bg-[rgba(239,68,68,0.08)] px-3 py-2">
+              <span className="min-w-0 flex-1 text-[11px] text-[var(--color-fg)]/78">
+                {dictationError}
+              </span>
+              <button
+                type="button"
+                onClick={retryDictation}
+                className="rounded-full bg-[var(--color-panel)] px-2.5 py-1 text-[11px] text-[var(--color-fg)]/85 transition-colors duration-150 hover:bg-[var(--color-surface-strong)]"
+              >
+                重试
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void openModelsDirectory();
+                }}
+                className="rounded-full bg-[var(--color-panel)] px-2.5 py-1 text-[11px] text-[var(--color-fg)]/85 transition-colors duration-150 hover:bg-[var(--color-surface-strong)]"
+              >
+                打开模型目录
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

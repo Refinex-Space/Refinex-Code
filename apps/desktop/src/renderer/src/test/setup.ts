@@ -13,6 +13,62 @@ class ResizeObserverMock {
   disconnect() {}
 }
 
+class MediaStreamTrackMock {
+  stop = vi.fn();
+}
+
+class MediaStreamMock {
+  track = new MediaStreamTrackMock();
+
+  getTracks() {
+    return [this.track];
+  }
+}
+
+class ScriptProcessorNodeMock {
+  onaudioprocess: ((event: { inputBuffer: { getChannelData: (channel: number) => Float32Array } }) => void) | null =
+    null;
+  connect = vi.fn();
+  disconnect = vi.fn();
+
+  emit(samples: number[]) {
+    this.onaudioprocess?.({
+      inputBuffer: {
+        getChannelData: () => Float32Array.from(samples),
+      },
+    });
+  }
+}
+
+class MediaStreamAudioSourceNodeMock {
+  connect = vi.fn();
+  disconnect = vi.fn();
+}
+
+class GainNodeMock {
+  gain = { value: 1 };
+  connect = vi.fn();
+  disconnect = vi.fn();
+}
+
+class AudioContextMock {
+  sampleRate = 48000;
+  static lastProcessor: ScriptProcessorNodeMock | null = null;
+
+  createMediaStreamSource = vi.fn(() => new MediaStreamAudioSourceNodeMock());
+  createScriptProcessor = vi.fn(() => {
+    const processor = new ScriptProcessorNodeMock();
+    AudioContextMock.lastProcessor = processor;
+    return processor;
+  });
+  createGain = vi.fn(() => new GainNodeMock());
+  close = vi.fn().mockResolvedValue(undefined);
+
+  static reset() {
+    AudioContextMock.lastProcessor = null;
+  }
+}
+
 if (typeof HTMLCanvasElement !== "undefined") {
   Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
     writable: true,
@@ -63,6 +119,18 @@ if (typeof window !== "undefined") {
   Object.defineProperty(window, "ResizeObserver", {
     writable: true,
     value: ResizeObserverMock,
+  });
+
+  Object.defineProperty(window, "AudioContext", {
+    writable: true,
+    value: AudioContextMock,
+  });
+
+  Object.defineProperty(window.navigator, "mediaDevices", {
+    writable: true,
+    value: {
+      getUserMedia: vi.fn().mockResolvedValue(new MediaStreamMock()),
+    },
   });
 }
 
@@ -219,6 +287,23 @@ const desktopBridgeMock: DesktopBridge = {
     cancelled: false,
     snapshot: defaultSkillsSnapshot,
   }),
+  prepareVoiceDictation: vi.fn().mockResolvedValue({
+    available: true,
+    provider: "sherpa-onnx",
+    modelId: "sherpa-onnx-paraformer-zh-small-2024-03-09",
+    modelLabel: "Paraformer ZH Small",
+    downloaded: true,
+    message: null,
+  }),
+  transcribeVoiceDictation: vi.fn().mockResolvedValue({
+    text: "帮我总结这个项目",
+    modelLabel: "Paraformer ZH Small",
+    sampleRate: 16000,
+    sampleCount: 16000,
+    durationMs: 180,
+  }),
+  openVoiceDictationModelsDirectory: vi.fn().mockResolvedValue(undefined),
+  onVoiceDictationProgress: vi.fn().mockImplementation(() => () => {}),
   getAppearanceSettings: vi.fn().mockResolvedValue(defaultAppearanceSettings),
   saveAppearanceSettings: vi
     .fn()
@@ -387,6 +472,23 @@ if (typeof window !== "undefined") {
       cancelled: false,
       snapshot: defaultSkillsSnapshot,
     });
+    vi.mocked(window.desktopApp.prepareVoiceDictation).mockResolvedValue({
+      available: true,
+      provider: "sherpa-onnx",
+      modelId: "sherpa-onnx-paraformer-zh-small-2024-03-09",
+      modelLabel: "Paraformer ZH Small",
+      downloaded: true,
+      message: null,
+    });
+    vi.mocked(window.desktopApp.transcribeVoiceDictation).mockResolvedValue({
+      text: "帮我总结这个项目",
+      modelLabel: "Paraformer ZH Small",
+      sampleRate: 16000,
+      sampleCount: 16000,
+      durationMs: 180,
+    });
+    vi.mocked(window.desktopApp.openVoiceDictationModelsDirectory).mockResolvedValue(undefined);
+    vi.mocked(window.desktopApp.onVoiceDictationProgress).mockImplementation(() => () => {});
     vi.mocked(window.desktopApp.getAppearanceSettings).mockResolvedValue(
       defaultAppearanceSettings,
     );
@@ -506,5 +608,6 @@ if (typeof window !== "undefined") {
     vi.mocked(window.desktopApp.selectSession).mockResolvedValue(defaultSidebarState);
     vi.mocked(window.desktopApp.removeSession).mockResolvedValue(defaultSidebarState);
     vi.mocked(window.desktopApp.showItemInFolder).mockResolvedValue(undefined);
+    AudioContextMock.reset();
   });
 }
