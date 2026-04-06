@@ -85,7 +85,47 @@ describe("desktop shell", () => {
     expect(
       screen.getByPlaceholderText("描述下一步要做的事，Enter 发送，Shift+Enter 换行"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "切换模型（TODO）" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "选择供应商" })).toHaveTextContent("Claude");
+      expect(screen.getByRole("button", { name: "选择模型" })).toHaveTextContent("Sonnet 4.6");
+      expect(screen.getByRole("button", { name: "选择推理强度" })).toHaveTextContent("High");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "选择供应商" }));
+    fireEvent.click(await screen.findByText("Codex"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "选择供应商" })).toHaveTextContent("Codex");
+      expect(screen.getByRole("button", { name: "选择模型" })).toHaveTextContent("GPT-5.4");
+      expect(screen.getByRole("button", { name: "选择推理强度" })).toHaveTextContent("Medium");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "选择模型" }));
+    fireEvent.click(await screen.findByText("GPT-5.4 Mini"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "选择模型" })).toHaveTextContent("GPT-5.4 Mini");
+      expect(screen.getByRole("button", { name: "选择推理强度" })).toHaveTextContent("Medium");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "选择推理强度" }));
+    fireEvent.click(await screen.findByText("Low"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "选择推理强度" })).toHaveTextContent("Low");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "选择供应商" }));
+    fireEvent.click(await screen.findByText("Claude"));
+    fireEvent.click(screen.getByRole("button", { name: "选择模型" }));
+    fireEvent.click(await screen.findByText("Haiku 4.5"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "选择模型" })).toHaveTextContent("Haiku 4.5");
+      expect(screen.getByRole("button", { name: "选择推理强度" })).toHaveTextContent("N/A");
+      expect(screen.getByRole("button", { name: "选择推理强度" })).toBeDisabled();
+    });
+
     fireEvent.click(projectTrigger);
     expect(
       await screen.findByPlaceholderText("Search projects"),

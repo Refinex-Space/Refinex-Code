@@ -1,10 +1,18 @@
 import { create } from "zustand";
 import type {
+  DesktopProviderId,
+  ProviderReasoningEffort,
+} from "../../../shared/provider-settings";
+import type {
   AppearanceColorMode,
   AppearanceColorPalette,
   AppearanceSettingsData,
   ThemeMode,
 } from "../../../shared/appearance-settings";
+import {
+  DEFAULT_CLAUDE_EFFORT,
+  DEFAULT_CLAUDE_MODEL,
+} from "../../../shared/provider-settings";
 import {
   DEFAULT_APPEARANCE_SETTINGS,
   DEFAULT_CODE_FONT_SIZE,
@@ -83,6 +91,10 @@ export const defaultUIState = {
   selectedSkillId: null as string | null,
   selectedSkillNodeId: null as string | null,
   skillsContentMode: "preview" as SkillsContentMode,
+  composerControlsHydrated: false,
+  composerProviderId: "anthropic" as DesktopProviderId,
+  composerModel: DEFAULT_CLAUDE_MODEL,
+  composerEffort: DEFAULT_CLAUDE_EFFORT as ProviderReasoningEffort,
   pointerCursorEnabled: false,
   uiFontSize: DEFAULT_UI_FONT_SIZE,
   codeFontSize: DEFAULT_CODE_FONT_SIZE,
@@ -102,6 +114,10 @@ interface UIState {
   selectedSkillId: string | null;
   selectedSkillNodeId: string | null;
   skillsContentMode: SkillsContentMode;
+  composerControlsHydrated: boolean;
+  composerProviderId: DesktopProviderId;
+  composerModel: string;
+  composerEffort: ProviderReasoningEffort;
   pointerCursorEnabled: boolean;
   uiFontSize: number;
   codeFontSize: number;
@@ -114,6 +130,18 @@ interface UIState {
   setSettingsSection: (section: SettingsSection) => void;
   selectSkillItem: (skillId: string | null, nodeId?: string | null) => void;
   setSkillsContentMode: (mode: SkillsContentMode) => void;
+  hydrateComposerControls: (selection: {
+    providerId: DesktopProviderId;
+    model: string;
+    effort: ProviderReasoningEffort;
+  }) => void;
+  setComposerProviderSelection: (selection: {
+    providerId: DesktopProviderId;
+    model: string;
+    effort: ProviderReasoningEffort;
+  }) => void;
+  setComposerModelSelection: (model: string, effort: ProviderReasoningEffort) => void;
+  setComposerEffortSelection: (effort: ProviderReasoningEffort) => void;
   toggleSidebar: () => void;
   setSidebarWidth: (width: number, viewportWidth?: number) => void;
   toggleTerminal: () => void;
@@ -169,6 +197,30 @@ export const useUIStore = create<UIState>((set) => ({
   },
   setSkillsContentMode: (skillsContentMode) => {
     set({ skillsContentMode });
+  },
+  hydrateComposerControls: ({ providerId, model, effort }) => {
+    set({
+      composerControlsHydrated: true,
+      composerProviderId: providerId,
+      composerModel: model,
+      composerEffort: effort,
+    });
+  },
+  setComposerProviderSelection: ({ providerId, model, effort }) => {
+    set({
+      composerProviderId: providerId,
+      composerModel: model,
+      composerEffort: effort,
+    });
+  },
+  setComposerModelSelection: (composerModel, composerEffort) => {
+    set({
+      composerModel,
+      composerEffort,
+    });
+  },
+  setComposerEffortSelection: (composerEffort) => {
+    set({ composerEffort });
   },
   toggleSidebar: () => {
     set((state) => ({ sidebarOpen: !state.sidebarOpen }));

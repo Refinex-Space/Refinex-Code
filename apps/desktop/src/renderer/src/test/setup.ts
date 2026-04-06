@@ -132,6 +132,16 @@ const defaultProviderSettings: DesktopProviderSettingsSnapshot = {
       defaultVerbosity: "medium",
       defaultContextWindowTokens: 272000,
     },
+    {
+      id: "gpt-5.4-mini",
+      label: "GPT-5.4 Mini",
+      description: "Faster and lighter for routine coding tasks",
+      supportedEffortLevels: ["minimal", "low", "medium", "high"],
+      defaultEffortLevel: "low",
+      supportedVerbosityLevels: ["low", "medium", "high"],
+      defaultVerbosity: "medium",
+      defaultContextWindowTokens: 272000,
+    },
   ],
 };
 

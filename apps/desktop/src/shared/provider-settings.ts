@@ -146,6 +146,39 @@ export const CODEX_MODEL_CATALOG: ProviderModelCatalogEntry[] = [
   },
 ];
 
+export const ANTHROPIC_MODEL_CATALOG: ProviderModelCatalogEntry[] = [
+  {
+    id: "claude-sonnet-4-6",
+    label: "Sonnet 4.6",
+    description: "Best for everyday coding and planning tasks",
+    supportedEffortLevels: ["low", "medium", "high", "xhigh"],
+    defaultEffortLevel: "high",
+    supportedVerbosityLevels: ["low", "medium", "high"],
+    defaultVerbosity: "medium",
+    defaultContextWindowTokens: 200_000,
+  },
+  {
+    id: "claude-opus-4-6",
+    label: "Opus 4.6",
+    description: "Most capable Claude model for complex work",
+    supportedEffortLevels: ["low", "medium", "high", "xhigh"],
+    defaultEffortLevel: "high",
+    supportedVerbosityLevels: ["low", "medium", "high"],
+    defaultVerbosity: "medium",
+    defaultContextWindowTokens: 200_000,
+  },
+  {
+    id: "claude-haiku-4-5",
+    label: "Haiku 4.5",
+    description: "Fastest Claude model for lightweight tasks",
+    supportedEffortLevels: [],
+    defaultEffortLevel: DEFAULT_CLAUDE_EFFORT,
+    supportedVerbosityLevels: ["low", "medium", "high"],
+    defaultVerbosity: "medium",
+    defaultContextWindowTokens: 200_000,
+  },
+];
+
 const verbosityLevels: ProviderVerbosity[] = ["low", "medium", "high"];
 const effortLevels: ProviderReasoningEffort[] = [
   "minimal",
@@ -160,6 +193,42 @@ export function getCodexCatalogEntry(model: string) {
   return CODEX_MODEL_CATALOG.find(
     (entry) => entry.id.toLowerCase() === normalized,
   );
+}
+
+export function getProviderModelCatalog(
+  providerId: DesktopProviderId,
+  codexModels: ProviderModelCatalogEntry[] = CODEX_MODEL_CATALOG,
+) {
+  return providerId === CODEX_PROVIDER_ID ? codexModels : ANTHROPIC_MODEL_CATALOG;
+}
+
+export function getProviderCatalogEntry(
+  providerId: DesktopProviderId,
+  model: string,
+  codexModels: ProviderModelCatalogEntry[] = CODEX_MODEL_CATALOG,
+) {
+  const normalized = model.trim().toLowerCase();
+  return getProviderModelCatalog(providerId, codexModels).find(
+    (entry) => entry.id.toLowerCase() === normalized,
+  );
+}
+
+export function normalizeProviderModel(
+  providerId: DesktopProviderId,
+  model: string,
+  codexModels: ProviderModelCatalogEntry[] = CODEX_MODEL_CATALOG,
+) {
+  const catalog = getProviderModelCatalog(providerId, codexModels);
+  const fallbackModel =
+    providerId === CODEX_PROVIDER_ID ? DEFAULT_CODEX_MODEL : DEFAULT_CLAUDE_MODEL;
+  const trimmed = model.trim();
+
+  if (!trimmed) {
+    return fallbackModel;
+  }
+
+  const matched = catalog.find((entry) => entry.id.toLowerCase() === trimmed.toLowerCase());
+  return matched?.id ?? fallbackModel;
 }
 
 export function normalizeCodexModel(model: string) {
@@ -197,6 +266,41 @@ export function getSupportedCodexVerbosityLevels(model: string) {
 
 export function getSupportedCodexEffortLevels(model: string) {
   return getCodexCatalogEntry(model)?.supportedEffortLevels ?? effortLevels;
+}
+
+export function getSupportedProviderEffortLevels(
+  providerId: DesktopProviderId,
+  model: string,
+  codexModels: ProviderModelCatalogEntry[] = CODEX_MODEL_CATALOG,
+) {
+  return (
+    getProviderCatalogEntry(providerId, model, codexModels)?.supportedEffortLevels ?? []
+  );
+}
+
+export function normalizeProviderEffort(
+  providerId: DesktopProviderId,
+  model: string,
+  effort: ProviderReasoningEffort,
+  codexModels: ProviderModelCatalogEntry[] = CODEX_MODEL_CATALOG,
+) {
+  if (providerId === CODEX_PROVIDER_ID) {
+    return normalizeCodexEffort(model, effort);
+  }
+
+  const entry = getProviderCatalogEntry(providerId, model, codexModels);
+  if (!entry) {
+    return DEFAULT_CLAUDE_EFFORT;
+  }
+
+  if (
+    entry.supportedEffortLevels.length > 0 &&
+    entry.supportedEffortLevels.includes(effort)
+  ) {
+    return effort;
+  }
+
+  return entry.defaultEffortLevel ?? DEFAULT_CLAUDE_EFFORT;
 }
 
 export function getResolvedCodexContextWindow(

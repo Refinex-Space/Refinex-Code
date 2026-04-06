@@ -146,7 +146,7 @@ export function Providers({ children }: ProvidersProps) {
   return (
     <Theme
       appearance={resolvedTheme}
-      accentColor="blue"
+      accentColor="gray"
       grayColor="slate"
       hasBackground={false}
       radius="medium"
