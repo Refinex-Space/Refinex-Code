@@ -59,6 +59,7 @@ export function TerminalPanel({ sessionId, cwd }: TerminalPanelProps) {
   const terminalHeight = useUIStore((state) => state.terminalHeight);
   const setTerminalHeight = useUIStore((state) => state.setTerminalHeight);
   const toggleTerminal = useUIStore((state) => state.toggleTerminal);
+  const codeFontSize = useUIStore((state) => state.codeFontSize);
   const [sessionInfo, setSessionInfo] = useState<TerminalSessionInfo | null>(null);
   const [lastExitCode, setLastExitCode] = useState<number | null>(null);
   const [terminalTheme, setTerminalTheme] = useState<ITheme | null>(() => resolveTerminalTheme());
@@ -125,7 +126,7 @@ export function TerminalPanel({ sessionId, cwd }: TerminalPanelProps) {
       allowTransparency: true,
       cursorBlink: true,
       fontFamily: "'SF Mono', 'JetBrains Mono', ui-monospace, monospace",
-      fontSize: 12.5,
+      fontSize: codeFontSize,
       lineHeight: 1.35,
       scrollback: 6000,
     });
@@ -181,6 +182,15 @@ export function TerminalPanel({ sessionId, cwd }: TerminalPanelProps) {
 
     terminalRef.current.options.theme = terminalTheme;
   }, [terminalTheme]);
+
+  useEffect(() => {
+    if (!terminalRef.current) {
+      return;
+    }
+
+    terminalRef.current.options.fontSize = codeFontSize;
+    fitAddonRef.current?.fit();
+  }, [codeFontSize]);
 
   const shellLabel =
     sessionInfo?.shellPath.split("/").filter(Boolean).at(-1) ?? "shell";

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { vi } from "vitest";
 import { App } from "@renderer/app";
 import {
@@ -16,6 +16,7 @@ describe("desktop shell", () => {
     const main = screen.getByRole("main");
     expect(within(header).queryByRole("button", { name: "Open Project" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "RWork logo" })).toBeInTheDocument();
     expect(within(main).getByText("选择项目")).toBeInTheDocument();
     expect(
@@ -131,6 +132,99 @@ describe("desktop shell", () => {
     expect(
       await screen.findByRole("button", { name: "Collapse sidebar" }),
     ).toBeInTheDocument();
+  });
+
+  it("opens the fullscreen settings panel and returns to the app", async () => {
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "设置" }));
+
+    expect(await screen.findByRole("heading", { name: "Appearance" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "返回应用" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Collapse sidebar" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "返回应用" }));
+
+    expect(
+      await screen.findByPlaceholderText("先打开一个项目，再从左侧创建或选择线程"),
+    ).toBeInTheDocument();
+  });
+
+  it("applies appearance settings in the fullscreen panel", async () => {
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "设置" }));
+    fireEvent.click(screen.getByRole("button", { name: "深色" }));
+
+    expect(document.documentElement.dataset.theme).toBe("dark");
+
+    fireEvent.click(screen.getByRole("switch", { name: "使用指针光标" }));
+    expect(document.documentElement.dataset.pointerCursor).toBe("enabled");
+
+    fireEvent.change(screen.getByLabelText("UI 字体大小"), {
+      target: { value: "15" },
+    });
+    fireEvent.change(screen.getByLabelText("代码字体大小"), {
+      target: { value: "14" },
+    });
+    fireEvent.change(screen.getByLabelText("侧边栏背景色（深色）"), {
+      target: { value: "#ddeeff" },
+    });
+    fireEvent.change(screen.getByLabelText("右侧主面板背景色（深色）"), {
+      target: { value: "#faf1e2" },
+    });
+
+    expect(document.documentElement.style.getPropertyValue("--ui-font-size")).toBe("15px");
+    expect(document.documentElement.style.getPropertyValue("--code-font-size")).toBe("14px");
+    expect(document.documentElement.style.getPropertyValue("--color-sidebar")).toBe("#ddeeff");
+    expect(document.documentElement.style.getPropertyValue("--color-bg")).toBe("#faf1e2");
+
+    await waitFor(() => {
+      expect(window.desktopApp.saveAppearanceSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          uiFontSize: 15,
+          codeFontSize: 14,
+          colors: expect.objectContaining({
+            dark: expect.objectContaining({
+              sidebarBackground: "#ddeeff",
+              panelBackground: "#faf1e2",
+            }),
+          }),
+        }),
+      );
+    });
+  });
+
+  it("hydrates persisted appearance colors on startup", async () => {
+    vi.mocked(window.desktopApp.getAppearanceSettings).mockResolvedValue({
+      theme: "light",
+      pointerCursorEnabled: true,
+      uiFontSize: 16,
+      codeFontSize: 13,
+      colors: {
+        light: {
+          sidebarBackground: "#ccddee",
+          panelBackground: "#fdf6ec",
+        },
+        dark: {
+          sidebarBackground: "#111315",
+          panelBackground: "#0a0b0d",
+        },
+      },
+      storagePath:
+        "/Users/test/Library/Application Support/RWork/appearance-settings.json",
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(document.documentElement.style.getPropertyValue("--color-sidebar")).toBe("#ccddee");
+      expect(document.documentElement.style.getPropertyValue("--color-bg")).toBe("#fdf6ec");
+      expect(document.documentElement.style.getPropertyValue("--ui-font-size")).toBe("16px");
+      expect(document.documentElement.dataset.pointerCursor).toBe("enabled");
+    });
   });
 
   it("toggles terminal with cmd+t", async () => {

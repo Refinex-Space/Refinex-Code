@@ -14,6 +14,8 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { CommandPalette } from "@renderer/components/command/command-palette";
+import { AppearanceSettingsPanel } from "@renderer/components/settings/appearance-settings-panel";
+import { SettingsSidebar } from "@renderer/components/settings/settings-sidebar";
 import { WorkspaceSidebar } from "@renderer/components/sidebar/workspace-sidebar";
 import { TerminalPanel } from "@renderer/components/terminal/terminal-panel";
 import { Button } from "@renderer/components/ui/button";
@@ -35,8 +37,13 @@ export function Layout() {
 
   const sidebarOpen = useUIStore((state) => state.sidebarOpen);
   const sidebarWidth = useUIStore((state) => state.sidebarWidth);
+  const shellView = useUIStore((state) => state.shellView);
+  const settingsSection = useUIStore((state) => state.settingsSection);
   const terminalOpen = useUIStore((state) => state.terminalOpen);
   const theme = useUIStore((state) => state.theme);
+  const openSettings = useUIStore((state) => state.openSettings);
+  const closeSettings = useUIStore((state) => state.closeSettings);
+  const setSettingsSection = useUIStore((state) => state.setSettingsSection);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const setSidebarWidth = useUIStore((state) => state.setSidebarWidth);
   const toggleTerminal = useUIStore((state) => state.toggleTerminal);
@@ -58,6 +65,7 @@ export function Layout() {
     removeSession,
     removeWorktree,
   } = useDesktopShell();
+  const isSettingsView = shellView === "settings";
 
   const handleOpenWorkspace = async () => {
     try {
@@ -150,15 +158,24 @@ export function Layout() {
         className="relative z-10 shrink-0 overflow-hidden border-r border-[var(--color-border)] bg-[var(--color-sidebar)]"
       >
         <div className="h-[var(--titlebar-height)]" />
-        <WorkspaceSidebar
-          onOpenWorkspace={handleOpenWorkspace}
-          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-          onSelectWorktree={selectWorktree}
-          onPrepareSession={prepareSession}
-          onSelectSession={selectSession}
-          onRemoveSession={removeSession}
-          onRemoveWorktree={removeWorktree}
-        />
+        {isSettingsView ? (
+          <SettingsSidebar
+            activeSection={settingsSection}
+            onSelectSection={setSettingsSection}
+            onBackToApp={closeSettings}
+          />
+        ) : (
+          <WorkspaceSidebar
+            onOpenWorkspace={handleOpenWorkspace}
+            onOpenSettings={() => openSettings("appearance")}
+            onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+            onSelectWorktree={selectWorktree}
+            onPrepareSession={prepareSession}
+            onSelectSession={selectSession}
+            onRemoveSession={removeSession}
+            onRemoveWorktree={removeWorktree}
+          />
+        )}
         {sidebarOpen ? (
           <div
             className="absolute top-0 right-0 h-full w-4 cursor-col-resize touch-none"
@@ -175,112 +192,120 @@ export function Layout() {
         >
           <div className="min-w-0 flex-1" data-window-drag-region />
 
-          <div className="flex items-center gap-2" data-no-drag>
-            <Tooltip
-              content={
-                <span className="inline-flex items-center gap-2">
-                  <span>{sidebarOpen ? "收起侧边栏" : "展开侧边栏"}</span>
-                  <Kbd className="h-5 px-1.5 text-[9px] tracking-[0.08em]">
-                    ⌘B
-                  </Kbd>
-                </span>
-              }
-            >
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-                onClick={toggleSidebar}
-                title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-                className="h-8 w-8 rounded-lg bg-transparent hover:bg-[var(--color-surface)]/72 hover:backdrop-blur-md focus-visible:bg-[var(--color-surface)]/72 focus-visible:backdrop-blur-md active:bg-[var(--color-surface-strong)]"
+          {isSettingsView ? null : (
+            <div className="flex items-center gap-2" data-no-drag>
+              <Tooltip
+                content={
+                  <span className="inline-flex items-center gap-2">
+                    <span>{sidebarOpen ? "收起侧边栏" : "展开侧边栏"}</span>
+                    <Kbd className="h-5 px-1.5 text-[9px] tracking-[0.08em]">
+                      ⌘B
+                    </Kbd>
+                  </span>
+                }
               >
-                {sidebarOpen ? (
-                  <PanelLeftClose className="h-4 w-4" />
-                ) : (
-                  <PanelLeftOpen className="h-4 w-4" />
-                )}
-              </Button>
-            </Tooltip>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+                  onClick={toggleSidebar}
+                  title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+                  className="h-8 w-8 rounded-lg bg-transparent hover:bg-[var(--color-surface)]/72 hover:backdrop-blur-md focus-visible:bg-[var(--color-surface)]/72 focus-visible:backdrop-blur-md active:bg-[var(--color-surface-strong)]"
+                >
+                  {sidebarOpen ? (
+                    <PanelLeftClose className="h-4 w-4" />
+                  ) : (
+                    <PanelLeftOpen className="h-4 w-4" />
+                  )}
+                </Button>
+              </Tooltip>
 
-            <Tooltip
-              content={
-                <span className="inline-flex items-center gap-2">
-                  <span>{terminalOpen ? "关闭终端" : "打开终端"}</span>
-                  <Kbd className="h-5 px-1.5 text-[9px] tracking-[0.08em]">
-                    ⌘T
-                  </Kbd>
-                </span>
-              }
-            >
-              <Button
-                variant={terminalOpen ? "secondary" : "ghost"}
-                size="icon"
-                aria-label={terminalOpen ? "Hide terminal" : "Show terminal"}
-                onClick={toggleTerminal}
-                title="Toggle terminal"
-                className="h-8 w-8 rounded-lg"
+              <Tooltip
+                content={
+                  <span className="inline-flex items-center gap-2">
+                    <span>{terminalOpen ? "关闭终端" : "打开终端"}</span>
+                    <Kbd className="h-5 px-1.5 text-[9px] tracking-[0.08em]">
+                      ⌘T
+                    </Kbd>
+                  </span>
+                }
               >
-                <SquareTerminal className="h-4 w-4" />
-              </Button>
-            </Tooltip>
+                <Button
+                  variant={terminalOpen ? "secondary" : "ghost"}
+                  size="icon"
+                  aria-label={terminalOpen ? "Hide terminal" : "Show terminal"}
+                  onClick={toggleTerminal}
+                  title="Toggle terminal"
+                  className="h-8 w-8 rounded-lg"
+                >
+                  <SquareTerminal className="h-4 w-4" />
+                </Button>
+              </Tooltip>
 
-            <Tooltip
-              content={
-                <span className="inline-flex items-center gap-2">
-                  <span>命令面板</span>
-                  <Kbd className="h-5 px-1.5 text-[9px] tracking-[0.08em]">
-                    ⌘K
-                  </Kbd>
-                </span>
-              }
-            >
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Open command palette"
-                onClick={() => setCommandPaletteOpen(true)}
-                title="Command palette"
-                className="h-8 w-8 rounded-lg"
+              <Tooltip
+                content={
+                  <span className="inline-flex items-center gap-2">
+                    <span>命令面板</span>
+                    <Kbd className="h-5 px-1.5 text-[9px] tracking-[0.08em]">
+                      ⌘K
+                    </Kbd>
+                  </span>
+                }
               >
-                <Command className="h-4 w-4" />
-              </Button>
-            </Tooltip>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Open command palette"
+                  onClick={() => setCommandPaletteOpen(true)}
+                  title="Command palette"
+                  className="h-8 w-8 rounded-lg"
+                >
+                  <Command className="h-4 w-4" />
+                </Button>
+              </Tooltip>
 
-            <Tooltip
-              content={
-                <span className="inline-flex items-center gap-2">
-                  <span>{`切换到 ${getNextThemeLabel(theme)} 主题`}</span>
-                  <Kbd className="h-5 px-1.5 text-[9px] tracking-[0.08em]">
-                    ⌘⇧T
-                  </Kbd>
-                </span>
-              }
-            >
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={`Cycle theme to ${getNextThemeLabel(theme)}`}
-                onClick={toggleTheme}
-                title={`Cycle theme to ${getNextThemeLabel(theme)}`}
-                className="h-8 w-8 rounded-lg"
+              <Tooltip
+                content={
+                  <span className="inline-flex items-center gap-2">
+                    <span>{`切换到 ${getNextThemeLabel(theme)} 主题`}</span>
+                    <Kbd className="h-5 px-1.5 text-[9px] tracking-[0.08em]">
+                      ⌘⇧T
+                    </Kbd>
+                  </span>
+                }
               >
-                <MoonStar className="h-4 w-4" />
-              </Button>
-            </Tooltip>
-          </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Cycle theme to ${getNextThemeLabel(theme)}`}
+                  onClick={toggleTheme}
+                  title={`Cycle theme to ${getNextThemeLabel(theme)}`}
+                  className="h-8 w-8 rounded-lg"
+                >
+                  <MoonStar className="h-4 w-4" />
+                </Button>
+              </Tooltip>
+            </div>
+          )}
         </header>
 
-        <main className="min-h-0 flex-1 px-4 pb-4">
-          <WorkspaceHome
-            worktrees={worktrees}
-            activeWorktree={activeWorktree}
-            activeSession={activeSession}
-            onOpenWorkspace={handleOpenWorkspace}
-            onSelectWorktree={selectWorktree}
-          />
+        <main className={isSettingsView ? "min-h-0 flex-1" : "min-h-0 flex-1 px-4 pb-4"}>
+          {isSettingsView ? (
+            settingsSection === "appearance" ? (
+              <AppearanceSettingsPanel />
+            ) : null
+          ) : (
+            <WorkspaceHome
+              worktrees={worktrees}
+              activeWorktree={activeWorktree}
+              activeSession={activeSession}
+              onOpenWorkspace={handleOpenWorkspace}
+              onSelectWorktree={selectWorktree}
+            />
+          )}
         </main>
 
-        {terminalOpen ? (
+        {terminalOpen && !isSettingsView ? (
           <TerminalPanel
             sessionId={
               activeSession?.id ?? activeWorktree?.id ?? "global-shell"

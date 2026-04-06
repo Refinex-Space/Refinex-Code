@@ -67,7 +67,7 @@ export function WorkspaceComposer({
             placeholder={placeholder}
             disabled={!hasActiveSession}
             aria-label={activeSessionTitle ?? "Session composer"}
-            className="max-h-[152px] min-h-[52px] w-full resize-none overflow-y-auto bg-transparent px-1 py-1 text-[15px] leading-6 text-[var(--color-fg)] outline-none placeholder:text-[var(--color-muted)] disabled:cursor-not-allowed disabled:placeholder:text-[var(--color-muted)]"
+            className="max-h-[152px] min-h-[52px] w-full resize-none overflow-y-auto bg-transparent px-1 py-1 text-[length:var(--ui-font-size-lg)] leading-6 text-[var(--color-fg)] outline-none placeholder:text-[var(--color-muted)] disabled:cursor-not-allowed disabled:placeholder:text-[var(--color-muted)]"
           />
         </div>
 
@@ -88,7 +88,7 @@ export function WorkspaceComposer({
               <button
                 type="button"
                 onClick={() => toast.info("TODO：模型切换待接入")}
-                className="inline-flex h-8 min-w-0 max-w-[15rem] items-center gap-1 rounded-full px-2.5 text-[12.5px] font-medium text-[var(--color-fg)]/80 transition-colors duration-150 hover:bg-[var(--color-surface)] hover:text-[var(--color-fg)]"
+                className="inline-flex h-8 min-w-0 max-w-[15rem] items-center gap-1 rounded-full px-2.5 text-[length:var(--ui-font-size-sm)] font-medium text-[var(--color-fg)]/80 transition-colors duration-150 hover:bg-[var(--color-surface)] hover:text-[var(--color-fg)]"
                 aria-label="切换模型（TODO）"
               >
                 <span className="truncate">模型选择 TODO</span>

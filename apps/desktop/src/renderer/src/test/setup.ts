@@ -1,6 +1,8 @@
 import "@testing-library/jest-dom/vitest";
 import { beforeEach, vi } from "vitest";
 import type { DesktopBridge } from "../../../shared/contracts";
+import { DEFAULT_APPEARANCE_SETTINGS } from "../../../shared/appearance-settings";
+import { useUIStore } from "@renderer/stores/ui";
 import { emptySidebarState, useWorktreeStore } from "@renderer/stores/worktree";
 
 class ResizeObserverMock {
@@ -67,6 +69,12 @@ const defaultSidebarState = {
   storageRoot: "/Users/test/Library/Application Support/RWork/sidebar-state",
 };
 
+const defaultAppearanceSettings = {
+  ...DEFAULT_APPEARANCE_SETTINGS,
+  storagePath:
+    "/Users/test/Library/Application Support/RWork/appearance-settings.json",
+};
+
 const desktopBridgeMock: DesktopBridge = {
   getAppInfo: vi.fn().mockResolvedValue({
     appName: "RWork",
@@ -75,6 +83,10 @@ const desktopBridgeMock: DesktopBridge = {
     defaultWorkspacePath: null,
   }),
   getSidebarState: vi.fn().mockResolvedValue(defaultSidebarState),
+  getAppearanceSettings: vi.fn().mockResolvedValue(defaultAppearanceSettings),
+  saveAppearanceSettings: vi
+    .fn()
+    .mockImplementation(async (settings) => ({ ...settings, storagePath: defaultAppearanceSettings.storagePath })),
   openWorktree: vi.fn().mockResolvedValue(defaultSidebarState),
   pickAndOpenWorktree: vi.fn().mockResolvedValue(null),
   selectWorktree: vi.fn().mockResolvedValue(defaultSidebarState),
@@ -104,8 +116,24 @@ if (typeof window !== "undefined") {
   });
 
   beforeEach(() => {
+    useUIStore.getState().reset();
     useWorktreeStore.getState().reset();
+    document.documentElement.removeAttribute("data-theme");
+    document.documentElement.removeAttribute("data-pointer-cursor");
+    document.documentElement.style.removeProperty("--ui-font-size");
+    document.documentElement.style.removeProperty("--code-font-size");
+    document.documentElement.style.removeProperty("--color-sidebar");
+    document.documentElement.style.removeProperty("--color-bg");
     vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue(defaultSidebarState);
+    vi.mocked(window.desktopApp.getAppearanceSettings).mockResolvedValue(
+      defaultAppearanceSettings,
+    );
+    vi.mocked(window.desktopApp.saveAppearanceSettings).mockImplementation(
+      async (settings) => ({
+        ...settings,
+        storagePath: defaultAppearanceSettings.storagePath,
+      }),
+    );
     vi.mocked(window.desktopApp.openWorktree).mockResolvedValue(defaultSidebarState);
     vi.mocked(window.desktopApp.pickAndOpenWorktree).mockResolvedValue(null);
     vi.mocked(window.desktopApp.selectWorktree).mockResolvedValue(defaultSidebarState);

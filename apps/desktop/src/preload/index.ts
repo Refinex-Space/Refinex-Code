@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
   AppInfo,
+  AppearanceSettingsData,
+  AppearanceSettingsSnapshot,
   DesktopBridge,
   SessionCreateInput,
   SidebarStateSnapshot,
@@ -13,6 +15,10 @@ import type {
 const desktopBridge: DesktopBridge = {
   getAppInfo: () => ipcRenderer.invoke("app:info") as Promise<AppInfo>,
   getSidebarState: () => ipcRenderer.invoke("sidebar:get-state") as Promise<SidebarStateSnapshot>,
+  getAppearanceSettings: () =>
+    ipcRenderer.invoke("appearance-settings:get") as Promise<AppearanceSettingsSnapshot>,
+  saveAppearanceSettings: (settings: AppearanceSettingsData) =>
+    ipcRenderer.invoke("appearance-settings:save", settings) as Promise<AppearanceSettingsSnapshot>,
   openWorktree: (projectPath) =>
     ipcRenderer.invoke("sidebar:open-worktree", projectPath) as Promise<SidebarStateSnapshot>,
   pickAndOpenWorktree: () =>

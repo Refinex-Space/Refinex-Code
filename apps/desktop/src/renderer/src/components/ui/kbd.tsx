@@ -9,7 +9,7 @@ export function Kbd({ children, className, ...props }: KbdProps) {
   return (
     <kbd
       className={cn(
-        "inline-flex h-6 items-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-muted)]",
+        "inline-flex h-6 items-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 font-mono text-[length:var(--code-font-size-xs)] uppercase tracking-[0.12em] text-[var(--color-muted)]",
         className,
       )}
       {...props}

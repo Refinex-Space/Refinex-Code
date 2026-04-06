@@ -1,3 +1,12 @@
+import type {
+  AppearanceSettingsData,
+  AppearanceSettingsSnapshot,
+} from "./appearance-settings";
+export type {
+  AppearanceSettingsData,
+  AppearanceSettingsSnapshot,
+} from "./appearance-settings";
+
 export interface AppInfo {
   appName: string;
   appVersion: string;
@@ -70,6 +79,10 @@ export interface TerminalExitPayload {
 export interface DesktopBridge {
   getAppInfo: () => Promise<AppInfo>;
   getSidebarState: () => Promise<SidebarStateSnapshot>;
+  getAppearanceSettings: () => Promise<AppearanceSettingsSnapshot>;
+  saveAppearanceSettings: (
+    settings: AppearanceSettingsData,
+  ) => Promise<AppearanceSettingsSnapshot>;
   openWorktree: (projectPath: string) => Promise<SidebarStateSnapshot>;
   pickAndOpenWorktree: () => Promise<SidebarStateSnapshot | null>;
   selectWorktree: (worktreeId: string) => Promise<SidebarStateSnapshot>;

@@ -5,6 +5,7 @@ import {
   FolderOpen,
   FolderPlus,
   Search,
+  Settings2,
   SquarePen,
   Trash2,
 } from "lucide-react";
@@ -24,6 +25,7 @@ import {
 
 interface WorkspaceSidebarProps {
   onOpenWorkspace: () => Promise<unknown>;
+  onOpenSettings: () => void;
   onOpenCommandPalette: () => void;
   onSelectWorktree: (worktreeId: string) => Promise<unknown>;
   onPrepareSession: (worktreeId: string) => Promise<unknown>;
@@ -34,6 +36,7 @@ interface WorkspaceSidebarProps {
 
 export function WorkspaceSidebar({
   onOpenWorkspace,
+  onOpenSettings,
   onOpenCommandPalette,
   onSelectWorktree,
   onPrepareSession,
@@ -85,7 +88,7 @@ export function WorkspaceSidebar({
       </div>
 
       <div className="flex items-center justify-between px-4 pb-3">
-        <span className="font-medium text-[11px] tracking-[0.08em] text-[var(--color-muted)]">
+        <span className="font-medium text-[length:var(--ui-font-size-2xs)] tracking-[0.08em] text-[var(--color-muted)]">
           线程
         </span>
         <div className="flex items-center gap-0.5">
@@ -118,7 +121,7 @@ export function WorkspaceSidebar({
                 <FolderOpen className="h-4 w-4" />
               </div>
               <div className="space-y-1">
-                <div className="text-[13px] font-medium text-[var(--color-fg)]/88">
+                <div className="text-[length:var(--ui-font-size-md)] font-medium text-[var(--color-fg)]/88">
                   打开一个项目开始
                 </div>
               </div> */}
@@ -127,7 +130,7 @@ export function WorkspaceSidebar({
                 onClick={() => {
                   runAction(onOpenWorkspace);
                 }}
-                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] text-[var(--color-muted)] transition-colors duration-150 hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-fg)]"
+                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[length:var(--ui-font-size-sm)] text-[var(--color-muted)] transition-colors duration-150 hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-fg)]"
               >
                 <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
                 Open Project
@@ -198,7 +201,7 @@ export function WorkspaceSidebar({
 
                         <span
                           className={cn(
-                            "min-w-0 flex-1 truncate font-medium text-[13px] leading-5",
+                            "min-w-0 flex-1 truncate font-medium text-[length:var(--ui-font-size-md)] leading-5",
                             isActiveProject
                               ? "text-[var(--color-fg)]"
                               : "text-[var(--color-fg)]/86",
@@ -265,6 +268,14 @@ export function WorkspaceSidebar({
             : null}
         </div>
       </ScrollArea>
+
+      <div className="border-t border-[var(--color-border)] px-3 py-3">
+        <SidebarActionButton
+          label="设置"
+          icon={Settings2}
+          onClick={onOpenSettings}
+        />
+      </div>
     </div>
   );
 }
@@ -293,7 +304,7 @@ function SidebarActionButton({
         className="h-[15px] w-[15px] shrink-0 text-[var(--color-muted)]"
         aria-hidden="true"
       />
-      <span className="min-w-0 flex-1 truncate font-medium text-[13px] leading-5">
+      <span className="min-w-0 flex-1 truncate font-medium text-[length:var(--ui-font-size-md)] leading-5">
         {label}
       </span>
     </motion.button>
@@ -401,7 +412,7 @@ function SidebarSessionItem({
       >
         <span
           className={cn(
-            "min-w-0 flex-1 truncate text-[13px] leading-5",
+            "min-w-0 flex-1 truncate text-[length:var(--ui-font-size-md)] leading-5",
             isActive
               ? "font-semibold text-[var(--color-fg)]"
               : "font-medium text-[var(--color-fg)]/86",
@@ -410,7 +421,7 @@ function SidebarSessionItem({
           {title}
         </span>
 
-        <span className="shrink-0 font-mono text-[11px] text-[var(--color-muted)]">
+        <span className="shrink-0 font-mono text-[length:var(--code-font-size-xs)] text-[var(--color-muted)]">
           {formatRelativeTimeLabel(updatedAt)}
         </span>
       </button>

@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type {
   AppInfo,
+  AppearanceSettingsData,
+  AppearanceSettingsSnapshot,
   SessionCreateInput,
   SidebarStateSnapshot,
   TerminalCreateInput,
@@ -11,6 +13,7 @@ import type {
   TerminalExitPayload,
   TerminalSessionInfo,
 } from "../shared/contracts";
+import { createAppearanceSettingsStore } from "./appearance-settings-store";
 import { createWorktreeStateStore } from "./worktree-state-store";
 
 interface TerminalSession {
@@ -25,6 +28,7 @@ const appName = "RWork";
 
 let mainWindow: BrowserWindow | null = null;
 let worktreeStateStore: ReturnType<typeof createWorktreeStateStore> | null = null;
+let appearanceSettingsStore: ReturnType<typeof createAppearanceSettingsStore> | null = null;
 
 function resolveAppIconPath() {
   const candidates = [
@@ -196,8 +200,25 @@ function getWorktreeStateStore() {
   return worktreeStateStore;
 }
 
+function getAppearanceSettingsStore() {
+  appearanceSettingsStore ??= createAppearanceSettingsStore({
+    userDataPath: app.getPath("userData"),
+  });
+
+  return appearanceSettingsStore;
+}
+
 function registerIpcHandlers() {
   ipcMain.handle("app:info", () => buildAppInfo());
+  ipcMain.handle("appearance-settings:get", (): AppearanceSettingsSnapshot => {
+    return getAppearanceSettingsStore().getSnapshot();
+  });
+  ipcMain.handle(
+    "appearance-settings:save",
+    (_event, settings: AppearanceSettingsData): AppearanceSettingsSnapshot => {
+      return getAppearanceSettingsStore().save(settings);
+    },
+  );
 
   ipcMain.handle("sidebar:get-state", (): SidebarStateSnapshot => {
     return getWorktreeStateStore().getSnapshot();

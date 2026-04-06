@@ -48,8 +48,100 @@ interface ProvidersProps {
   children: ReactNode;
 }
 
+function supportsAppearancePersistence() {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.desktopApp?.getAppearanceSettings === "function" &&
+    typeof window.desktopApp?.saveAppearanceSettings === "function"
+  );
+}
+
 export function Providers({ children }: ProvidersProps) {
   const resolvedTheme = useResolvedTheme();
+  const theme = useUIStore((state) => state.theme);
+  const pointerCursorEnabled = useUIStore((state) => state.pointerCursorEnabled);
+  const uiFontSize = useUIStore((state) => state.uiFontSize);
+  const codeFontSize = useUIStore((state) => state.codeFontSize);
+  const colors = useUIStore((state) => state.colors);
+  const appearanceSettingsHydrated = useUIStore(
+    (state) => state.appearanceSettingsHydrated,
+  );
+  const hydrateAppearanceSettings = useUIStore(
+    (state) => state.hydrateAppearanceSettings,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!supportsAppearancePersistence()) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void window.desktopApp
+      .getAppearanceSettings()
+      .then((snapshot) => {
+        if (cancelled) {
+          return;
+        }
+
+        hydrateAppearanceSettings({
+          theme: snapshot.theme,
+          pointerCursorEnabled: snapshot.pointerCursorEnabled,
+          uiFontSize: snapshot.uiFontSize,
+          codeFontSize: snapshot.codeFontSize,
+          colors: snapshot.colors,
+        });
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrateAppearanceSettings]);
+
+  useEffect(() => {
+    const activeColors = colors[resolvedTheme];
+    document.documentElement.style.setProperty("--ui-font-size", `${uiFontSize}px`);
+    document.documentElement.style.setProperty("--code-font-size", `${codeFontSize}px`);
+    document.documentElement.style.setProperty(
+      "--color-sidebar",
+      activeColors.sidebarBackground,
+    );
+    document.documentElement.style.setProperty(
+      "--color-bg",
+      activeColors.panelBackground,
+    );
+    document.documentElement.dataset.pointerCursor = pointerCursorEnabled
+      ? "enabled"
+      : "disabled";
+  }, [codeFontSize, colors, pointerCursorEnabled, resolvedTheme, uiFontSize]);
+
+  useEffect(() => {
+    if (
+      !appearanceSettingsHydrated ||
+      !supportsAppearancePersistence()
+    ) {
+      return;
+    }
+
+    void window.desktopApp
+      .saveAppearanceSettings({
+        theme,
+        pointerCursorEnabled,
+        uiFontSize,
+        codeFontSize,
+        colors,
+      })
+      .catch(() => undefined);
+  }, [
+    appearanceSettingsHydrated,
+    codeFontSize,
+    colors,
+    pointerCursorEnabled,
+    theme,
+    uiFontSize,
+  ]);
 
   return (
     <Theme
