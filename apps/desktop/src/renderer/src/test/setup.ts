@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { beforeEach, vi } from "vitest";
 import type { DesktopBridge } from "../../../shared/contracts";
 import { DEFAULT_APPEARANCE_SETTINGS } from "../../../shared/appearance-settings";
+import type { DesktopProviderSettingsSnapshot } from "../../../shared/provider-settings";
 import { useUIStore } from "@renderer/stores/ui";
 import { emptySidebarState, useWorktreeStore } from "@renderer/stores/worktree";
 
@@ -75,6 +76,58 @@ const defaultAppearanceSettings = {
     "/Users/test/Library/Application Support/RWork/appearance-settings.json",
 };
 
+const defaultProviderSettings: DesktopProviderSettingsSnapshot = {
+  activeProviderId: "anthropic",
+  requestedProviderId: "anthropic",
+  warning: null,
+  lock: null,
+  paths: {
+    providersPath: "/Users/test/.claude/providers.json",
+    authPath: "/Users/test/.claude/auth.json",
+    settingsPath: "/Users/test/.claude/settings.json",
+  },
+  anthropic: {
+    providerId: "anthropic",
+    label: "Claude",
+    description:
+      "内建 Anthropic Messages 供应商，认证与订阅流程仍由 CLI 现有登录链路负责。",
+    driver: "anthropic-messages",
+    baseUrl: "https://api.anthropic.com",
+    defaultModel: "claude-sonnet-4-6",
+    defaultReasoningEffort: "high",
+    isActive: true,
+  },
+  codex: {
+    providerId: "codex",
+    label: "Codex",
+    description:
+      "使用 OpenAI Responses 兼容配置来驱动桌面端与 CLI 的 Codex 供应商。",
+    driver: "openai-responses",
+    baseUrl: "https://api.openai.com/v1",
+    defaultModel: "gpt-5.4",
+    defaultVerbosity: "medium",
+    defaultReasoningEffort: "medium",
+    modelContextWindow: undefined,
+    modelAutoCompactTokenLimit: undefined,
+    resolvedModelContextWindow: 272000,
+    resolvedModelAutoCompactTokenLimit: 244800,
+    hasStoredCredential: true,
+    isActive: false,
+  },
+  codexModels: [
+    {
+      id: "gpt-5.4",
+      label: "GPT-5.4",
+      description: "Best default for general coding and planning",
+      supportedEffortLevels: ["minimal", "low", "medium", "high", "xhigh"],
+      defaultEffortLevel: "medium",
+      supportedVerbosityLevels: ["low", "medium", "high"],
+      defaultVerbosity: "medium",
+      defaultContextWindowTokens: 272000,
+    },
+  ],
+};
+
 const desktopBridgeMock: DesktopBridge = {
   getAppInfo: vi.fn().mockResolvedValue({
     appName: "RWork",
@@ -87,6 +140,47 @@ const desktopBridgeMock: DesktopBridge = {
   saveAppearanceSettings: vi
     .fn()
     .mockImplementation(async (settings) => ({ ...settings, storagePath: defaultAppearanceSettings.storagePath })),
+  getProviderSettings: vi.fn().mockResolvedValue(defaultProviderSettings),
+  saveProviderSettings: vi.fn().mockImplementation(async (settings) => {
+    if (settings.providerId === "anthropic") {
+      return {
+        ...defaultProviderSettings,
+        activeProviderId: "anthropic",
+        requestedProviderId: "anthropic",
+        anthropic: {
+          ...defaultProviderSettings.anthropic,
+          isActive: true,
+        },
+        codex: {
+          ...defaultProviderSettings.codex,
+          isActive: false,
+        },
+      };
+    }
+
+    return {
+      ...defaultProviderSettings,
+      activeProviderId: "codex",
+      requestedProviderId: "codex",
+      codex: {
+        ...defaultProviderSettings.codex,
+        baseUrl: settings.baseUrl,
+        defaultModel: settings.defaultModel,
+        defaultVerbosity: settings.defaultVerbosity,
+        defaultReasoningEffort: settings.defaultReasoningEffort,
+        modelContextWindow: settings.modelContextWindow,
+        modelAutoCompactTokenLimit: settings.modelAutoCompactTokenLimit,
+        resolvedModelContextWindow: settings.modelContextWindow ?? 272000,
+        resolvedModelAutoCompactTokenLimit:
+          settings.modelAutoCompactTokenLimit ?? 244800,
+        isActive: true,
+      },
+      anthropic: {
+        ...defaultProviderSettings.anthropic,
+        isActive: false,
+      },
+    };
+  }),
   openWorktree: vi.fn().mockResolvedValue(defaultSidebarState),
   pickAndOpenWorktree: vi.fn().mockResolvedValue(null),
   selectWorktree: vi.fn().mockResolvedValue(defaultSidebarState),
@@ -133,6 +227,51 @@ if (typeof window !== "undefined") {
         ...settings,
         storagePath: defaultAppearanceSettings.storagePath,
       }),
+    );
+    vi.mocked(window.desktopApp.getProviderSettings).mockResolvedValue(
+      defaultProviderSettings,
+    );
+    vi.mocked(window.desktopApp.saveProviderSettings).mockImplementation(
+      async (settings) => {
+        if (settings.providerId === "anthropic") {
+          return {
+            ...defaultProviderSettings,
+            activeProviderId: "anthropic",
+            requestedProviderId: "anthropic",
+            anthropic: {
+              ...defaultProviderSettings.anthropic,
+              isActive: true,
+            },
+            codex: {
+              ...defaultProviderSettings.codex,
+              isActive: false,
+            },
+          };
+        }
+
+        return {
+          ...defaultProviderSettings,
+          activeProviderId: "codex",
+          requestedProviderId: "codex",
+          codex: {
+            ...defaultProviderSettings.codex,
+            baseUrl: settings.baseUrl,
+            defaultModel: settings.defaultModel,
+            defaultVerbosity: settings.defaultVerbosity,
+            defaultReasoningEffort: settings.defaultReasoningEffort,
+            modelContextWindow: settings.modelContextWindow,
+            modelAutoCompactTokenLimit: settings.modelAutoCompactTokenLimit,
+            resolvedModelContextWindow: settings.modelContextWindow ?? 272000,
+            resolvedModelAutoCompactTokenLimit:
+              settings.modelAutoCompactTokenLimit ?? 244800,
+            isActive: true,
+          },
+          anthropic: {
+            ...defaultProviderSettings.anthropic,
+            isActive: false,
+          },
+        };
+      },
     );
     vi.mocked(window.desktopApp.openWorktree).mockResolvedValue(defaultSidebarState);
     vi.mocked(window.desktopApp.pickAndOpenWorktree).mockResolvedValue(null);

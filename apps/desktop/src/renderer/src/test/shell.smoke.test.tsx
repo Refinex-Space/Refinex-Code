@@ -227,6 +227,65 @@ describe("desktop shell", () => {
     });
   });
 
+  it("renders provider settings and saves a Codex configuration", async () => {
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "设置" }));
+    fireEvent.click(screen.getByRole("button", { name: "供应商" }));
+
+    expect(await screen.findByRole("heading", { name: "供应商" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Codex" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Claude" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Codex" }));
+    fireEvent.change(screen.getByLabelText("Codex Base URL"), {
+      target: { value: "https://gateway.example.com/v1" },
+    });
+    fireEvent.change(screen.getByLabelText("Codex 默认模型"), {
+      target: { value: "gpt-5.4" },
+    });
+    fireEvent.change(screen.getByLabelText("Codex Verbosity"), {
+      target: { value: "high" },
+    });
+    fireEvent.change(screen.getByLabelText("Codex Reasoning Effort"), {
+      target: { value: "high" },
+    });
+    fireEvent.change(screen.getByLabelText("Codex Context Window"), {
+      target: { value: "300000" },
+    });
+    fireEvent.change(screen.getByLabelText("Codex Auto Compact Trigger"), {
+      target: { value: "240000" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存 Codex 配置" }));
+
+    await waitFor(() => {
+      expect(window.desktopApp.saveProviderSettings).toHaveBeenCalledWith({
+        providerId: "codex",
+        baseUrl: "https://gateway.example.com/v1",
+        apiKey: "",
+        defaultModel: "gpt-5.4",
+        defaultVerbosity: "high",
+        defaultReasoningEffort: "high",
+        modelContextWindow: 300000,
+        modelAutoCompactTokenLimit: 240000,
+      });
+    });
+  });
+
+  it("switches back to Claude from the provider settings panel", async () => {
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "设置" }));
+    fireEvent.click(screen.getByRole("button", { name: "供应商" }));
+    fireEvent.click(await screen.findByRole("button", { name: "保存并切换到 Claude" }));
+
+    await waitFor(() => {
+      expect(window.desktopApp.saveProviderSettings).toHaveBeenCalledWith({
+        providerId: "anthropic",
+      });
+    });
+  });
+
   it("toggles terminal with cmd+t", async () => {
     render(<App />);
     const header = screen.getByRole("banner");

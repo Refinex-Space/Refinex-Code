@@ -2,10 +2,18 @@ import type {
   AppearanceSettingsData,
   AppearanceSettingsSnapshot,
 } from "./appearance-settings";
+import type {
+  DesktopProviderSettingsSaveInput,
+  DesktopProviderSettingsSnapshot,
+} from "./provider-settings";
 export type {
   AppearanceSettingsData,
   AppearanceSettingsSnapshot,
 } from "./appearance-settings";
+export type {
+  DesktopProviderSettingsSaveInput,
+  DesktopProviderSettingsSnapshot,
+} from "./provider-settings";
 
 export interface AppInfo {
   appName: string;
@@ -83,6 +91,10 @@ export interface DesktopBridge {
   saveAppearanceSettings: (
     settings: AppearanceSettingsData,
   ) => Promise<AppearanceSettingsSnapshot>;
+  getProviderSettings: () => Promise<DesktopProviderSettingsSnapshot>;
+  saveProviderSettings: (
+    settings: DesktopProviderSettingsSaveInput,
+  ) => Promise<DesktopProviderSettingsSnapshot>;
   openWorktree: (projectPath: string) => Promise<SidebarStateSnapshot>;
   pickAndOpenWorktree: () => Promise<SidebarStateSnapshot | null>;
   selectWorktree: (worktreeId: string) => Promise<SidebarStateSnapshot>;

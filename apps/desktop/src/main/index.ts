@@ -6,6 +6,8 @@ import type {
   AppInfo,
   AppearanceSettingsData,
   AppearanceSettingsSnapshot,
+  DesktopProviderSettingsSaveInput,
+  DesktopProviderSettingsSnapshot,
   SessionCreateInput,
   SidebarStateSnapshot,
   TerminalCreateInput,
@@ -14,6 +16,7 @@ import type {
   TerminalSessionInfo,
 } from "../shared/contracts";
 import { createAppearanceSettingsStore } from "./appearance-settings-store";
+import { createProviderSettingsStore } from "./provider-settings-store";
 import { createWorktreeStateStore } from "./worktree-state-store";
 
 interface TerminalSession {
@@ -29,6 +32,7 @@ const appName = "RWork";
 let mainWindow: BrowserWindow | null = null;
 let worktreeStateStore: ReturnType<typeof createWorktreeStateStore> | null = null;
 let appearanceSettingsStore: ReturnType<typeof createAppearanceSettingsStore> | null = null;
+let providerSettingsStore: ReturnType<typeof createProviderSettingsStore> | null = null;
 
 function resolveAppIconPath() {
   const candidates = [
@@ -208,6 +212,12 @@ function getAppearanceSettingsStore() {
   return appearanceSettingsStore;
 }
 
+function getProviderSettingsStore() {
+  providerSettingsStore ??= createProviderSettingsStore();
+
+  return providerSettingsStore;
+}
+
 function registerIpcHandlers() {
   ipcMain.handle("app:info", () => buildAppInfo());
   ipcMain.handle("appearance-settings:get", (): AppearanceSettingsSnapshot => {
@@ -217,6 +227,15 @@ function registerIpcHandlers() {
     "appearance-settings:save",
     (_event, settings: AppearanceSettingsData): AppearanceSettingsSnapshot => {
       return getAppearanceSettingsStore().save(settings);
+    },
+  );
+  ipcMain.handle("provider-settings:get", (): DesktopProviderSettingsSnapshot => {
+    return getProviderSettingsStore().getSnapshot();
+  });
+  ipcMain.handle(
+    "provider-settings:save",
+    (_event, settings: DesktopProviderSettingsSaveInput): DesktopProviderSettingsSnapshot => {
+      return getProviderSettingsStore().save(settings).snapshot;
     },
   );
 

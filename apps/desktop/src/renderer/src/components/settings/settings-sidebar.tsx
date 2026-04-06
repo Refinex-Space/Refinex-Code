@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowLeft, SunMedium } from "lucide-react";
+import { ArrowLeft, PlugZap, SunMedium } from "lucide-react";
 import { ScrollArea } from "@renderer/components/ui/scroll-area";
 import { cn } from "@renderer/lib/cn";
 import type { SettingsSection } from "@renderer/stores/ui";
@@ -41,6 +41,12 @@ export function SettingsSidebar({
             label="Appearance"
             icon={SunMedium}
             onClick={() => onSelectSection("appearance")}
+          />
+          <SettingsNavItem
+            active={activeSection === "provider"}
+            label="供应商"
+            icon={PlugZap}
+            onClick={() => onSelectSection("provider")}
           />
         </nav>
       </ScrollArea>

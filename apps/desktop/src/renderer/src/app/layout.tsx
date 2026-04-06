@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 import { CommandPalette } from "@renderer/components/command/command-palette";
 import { AppearanceSettingsPanel } from "@renderer/components/settings/appearance-settings-panel";
+import { ProviderSettingsPanel } from "@renderer/components/settings/provider-settings-panel";
 import { SettingsSidebar } from "@renderer/components/settings/settings-sidebar";
 import { WorkspaceSidebar } from "@renderer/components/sidebar/workspace-sidebar";
 import { TerminalPanel } from "@renderer/components/terminal/terminal-panel";
@@ -293,6 +294,8 @@ export function Layout() {
           {isSettingsView ? (
             settingsSection === "appearance" ? (
               <AppearanceSettingsPanel />
+            ) : settingsSection === "provider" ? (
+              <ProviderSettingsPanel />
             ) : null
           ) : (
             <WorkspaceHome

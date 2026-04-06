@@ -4,6 +4,8 @@ import type {
   AppearanceSettingsData,
   AppearanceSettingsSnapshot,
   DesktopBridge,
+  DesktopProviderSettingsSaveInput,
+  DesktopProviderSettingsSnapshot,
   SessionCreateInput,
   SidebarStateSnapshot,
   TerminalCreateInput,
@@ -19,6 +21,10 @@ const desktopBridge: DesktopBridge = {
     ipcRenderer.invoke("appearance-settings:get") as Promise<AppearanceSettingsSnapshot>,
   saveAppearanceSettings: (settings: AppearanceSettingsData) =>
     ipcRenderer.invoke("appearance-settings:save", settings) as Promise<AppearanceSettingsSnapshot>,
+  getProviderSettings: () =>
+    ipcRenderer.invoke("provider-settings:get") as Promise<DesktopProviderSettingsSnapshot>,
+  saveProviderSettings: (settings: DesktopProviderSettingsSaveInput) =>
+    ipcRenderer.invoke("provider-settings:save", settings) as Promise<DesktopProviderSettingsSnapshot>,
   openWorktree: (projectPath) =>
     ipcRenderer.invoke("sidebar:open-worktree", projectPath) as Promise<SidebarStateSnapshot>,
   pickAndOpenWorktree: () =>
