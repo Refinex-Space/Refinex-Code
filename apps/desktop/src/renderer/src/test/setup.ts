@@ -71,6 +71,12 @@ const defaultSidebarState = {
   storageRoot: "/Users/test/Library/Application Support/RWork/sidebar-state",
 };
 
+const defaultSkillsSnapshot = {
+  skills: [],
+  activeWorktreePath: null,
+  generatedAt: "2026-04-06T00:00:00.000Z",
+};
+
 const defaultAppearanceSettings = {
   ...DEFAULT_APPEARANCE_SETTINGS,
   storagePath:
@@ -171,6 +177,38 @@ const desktopBridgeMock: DesktopBridge = {
     defaultWorkspacePath: null,
   }),
   getSidebarState: vi.fn().mockResolvedValue(defaultSidebarState),
+  getSkillsSnapshot: vi.fn().mockResolvedValue(defaultSkillsSnapshot),
+  readSkillFile: vi.fn().mockResolvedValue({
+    path: "/Users/test/.agents/skills/example/SKILL.md",
+    kind: "markdown",
+    size: 24,
+    language: "markdown",
+    content: "# Example\n\nBody",
+  }),
+  replaceSkill: vi.fn().mockResolvedValue({
+    cancelled: false,
+    snapshot: defaultSkillsSnapshot,
+  }),
+  downloadSkill: vi.fn().mockResolvedValue({
+    cancelled: false,
+    targetPath: "/Users/test/Downloads/example.zip",
+  }),
+  uninstallSkill: vi.fn().mockResolvedValue({
+    cancelled: false,
+    snapshot: defaultSkillsSnapshot,
+  }),
+  uploadSkill: vi.fn().mockResolvedValue({
+    cancelled: false,
+    snapshot: defaultSkillsSnapshot,
+  }),
+  getRemoteSkillCatalog: vi.fn().mockResolvedValue({
+    skills: [],
+    fetchedAt: "2026-04-06T00:00:00.000Z",
+  }),
+  installRemoteSkill: vi.fn().mockResolvedValue({
+    cancelled: false,
+    snapshot: defaultSkillsSnapshot,
+  }),
   getAppearanceSettings: vi.fn().mockResolvedValue(defaultAppearanceSettings),
   saveAppearanceSettings: vi
     .fn()
@@ -305,6 +343,40 @@ if (typeof window !== "undefined") {
     document.documentElement.style.removeProperty("--color-sidebar");
     document.documentElement.style.removeProperty("--color-bg");
     vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue(defaultSidebarState);
+    vi.mocked(window.desktopApp.getSkillsSnapshot).mockResolvedValue(
+      defaultSkillsSnapshot,
+    );
+    vi.mocked(window.desktopApp.readSkillFile).mockResolvedValue({
+      path: "/Users/test/.agents/skills/example/SKILL.md",
+      kind: "markdown",
+      size: 24,
+      language: "markdown",
+      content: "# Example\n\nBody",
+    });
+    vi.mocked(window.desktopApp.replaceSkill).mockResolvedValue({
+      cancelled: false,
+      snapshot: defaultSkillsSnapshot,
+    });
+    vi.mocked(window.desktopApp.downloadSkill).mockResolvedValue({
+      cancelled: false,
+      targetPath: "/Users/test/Downloads/example.zip",
+    });
+    vi.mocked(window.desktopApp.uninstallSkill).mockResolvedValue({
+      cancelled: false,
+      snapshot: defaultSkillsSnapshot,
+    });
+    vi.mocked(window.desktopApp.uploadSkill).mockResolvedValue({
+      cancelled: false,
+      snapshot: defaultSkillsSnapshot,
+    });
+    vi.mocked(window.desktopApp.getRemoteSkillCatalog).mockResolvedValue({
+      skills: [],
+      fetchedAt: "2026-04-06T00:00:00.000Z",
+    });
+    vi.mocked(window.desktopApp.installRemoteSkill).mockResolvedValue({
+      cancelled: false,
+      snapshot: defaultSkillsSnapshot,
+    });
     vi.mocked(window.desktopApp.getAppearanceSettings).mockResolvedValue(
       defaultAppearanceSettings,
     );

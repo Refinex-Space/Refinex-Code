@@ -12,6 +12,13 @@ import type {
   DesktopProviderSettingsSaveInput,
   DesktopProviderSettingsSnapshot,
   SessionCreateInput,
+  RemoteSkillCatalog,
+  SkillDownloadResult,
+  SkillFilePreview,
+  SkillMutationResult,
+  SkillRecord,
+  SkillSnapshot,
+  SkillUploadResult,
   SidebarStateSnapshot,
   TerminalCreateInput,
   TerminalDataPayload,
@@ -21,6 +28,20 @@ import type {
 import { createAppearanceSettingsStore } from "./appearance-settings-store";
 import { createMcpSettingsStore } from "./mcp-settings-store";
 import { createProviderSettingsStore } from "./provider-settings-store";
+import {
+  loadDesktopSkillSnapshot,
+  readSkillFilePreview,
+  getDefaultPersonalSkillRoots,
+} from "./skills-snapshot";
+import { getRemoteSkillCatalog, installRemoteSkill } from "./remote-skills";
+import {
+  createSkillArchive,
+  getSkillDirectoryName,
+  inspectUploadedSkillArchive,
+  installSkillFromArchive,
+  replaceSkillFromArchive,
+  uninstallSkillDirectory,
+} from "./skills-actions";
 import { createWorktreeStateStore } from "./worktree-state-store";
 
 interface TerminalSession {
@@ -229,6 +250,25 @@ function getMcpSettingsStore() {
   return mcpSettingsStore;
 }
 
+async function loadCurrentSkillSnapshot() {
+  const activeWorktree = getWorktreeStateStore().getActiveWorktreePath();
+  return loadDesktopSkillSnapshot(activeWorktree);
+}
+
+async function requireSkillRecord(skillRoot: string): Promise<SkillRecord> {
+  const snapshot = await loadCurrentSkillSnapshot();
+  const skill = snapshot.skills.find((candidate) => candidate.skillRoot === skillRoot);
+  if (!skill) {
+    throw new Error("未找到目标 Skill，列表可能已过期，请刷新后重试。");
+  }
+
+  return skill;
+}
+
+function getPreferredPersonalSkillRoot() {
+  return getDefaultPersonalSkillRoots()[0] ?? join(app.getPath("home"), ".agents", "skills");
+}
+
 function registerIpcHandlers() {
   ipcMain.handle("app:info", () => buildAppInfo());
   ipcMain.handle("appearance-settings:get", (): AppearanceSettingsSnapshot => {
@@ -271,6 +311,234 @@ function registerIpcHandlers() {
   ipcMain.handle("sidebar:get-state", (): SidebarStateSnapshot => {
     return getWorktreeStateStore().getSnapshot();
   });
+  ipcMain.handle("skills:get-snapshot", async (): Promise<SkillSnapshot> => {
+    return loadCurrentSkillSnapshot();
+  });
+  ipcMain.handle(
+    "skills:read-file",
+    async (_event, path: string): Promise<SkillFilePreview> => {
+      return readSkillFilePreview(path);
+    },
+  );
+  ipcMain.handle(
+    "skills:replace",
+    async (_event, skillRoot: string): Promise<SkillMutationResult> => {
+      if (!mainWindow) {
+        throw new Error("主窗口不可用。");
+      }
+
+      const skill = await requireSkillRecord(skillRoot);
+      const skillDirectoryName = getSkillDirectoryName(skill.skillRoot);
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: `替换 ${skill.displayName}`,
+        properties: ["openFile"],
+        filters: [
+          {
+            name: "ZIP archive",
+            extensions: ["zip"],
+          },
+        ],
+      });
+
+      if (result.canceled || !result.filePaths[0]) {
+        return {
+          cancelled: true,
+          snapshot: null,
+        };
+      }
+
+      await replaceSkillFromArchive(skill.skillRoot, result.filePaths[0]);
+      return {
+        cancelled: false,
+        snapshot: await loadCurrentSkillSnapshot(),
+      };
+    },
+  );
+  ipcMain.handle(
+    "skills:download",
+    async (_event, skillRoot: string): Promise<SkillDownloadResult> => {
+      if (!mainWindow) {
+        throw new Error("主窗口不可用。");
+      }
+
+      const skill = await requireSkillRecord(skillRoot);
+      const skillDirectoryName = getSkillDirectoryName(skill.skillRoot);
+      const result = await dialog.showSaveDialog(mainWindow, {
+        title: `下载 ${skill.displayName}`,
+        defaultPath: join(app.getPath("downloads"), `${skillDirectoryName}.zip`),
+        filters: [
+          {
+            name: "ZIP archive",
+            extensions: ["zip"],
+          },
+        ],
+      });
+
+      if (result.canceled || !result.filePath) {
+        return {
+          cancelled: true,
+          targetPath: null,
+        };
+      }
+
+      await createSkillArchive(skill.skillRoot, result.filePath);
+      return {
+        cancelled: false,
+        targetPath: result.filePath,
+      };
+    },
+  );
+  ipcMain.handle(
+    "skills:uninstall",
+    async (_event, skillRoot: string): Promise<SkillMutationResult> => {
+      if (!mainWindow) {
+        throw new Error("主窗口不可用。");
+      }
+
+      const skill = await requireSkillRecord(skillRoot);
+      const confirmation = await dialog.showMessageBox(mainWindow, {
+        type: "warning",
+        buttons: ["取消", "卸载"],
+        defaultId: 0,
+        cancelId: 0,
+        title: `卸载 ${skill.displayName}`,
+        message: `确认卸载 ${skill.displayName} 吗？`,
+        detail: `该操作会从 ${skill.sourceLabel} 的磁盘位置永久移除 ${getSkillDirectoryName(skill.skillRoot)}。`,
+      });
+
+      if (confirmation.response !== 1) {
+        return {
+          cancelled: true,
+          snapshot: null,
+        };
+      }
+
+      await uninstallSkillDirectory(skill.skillRoot);
+      return {
+        cancelled: false,
+        snapshot: await loadCurrentSkillSnapshot(),
+      };
+    },
+  );
+  ipcMain.handle(
+    "skills:upload",
+    async (): Promise<SkillUploadResult> => {
+      if (!mainWindow) {
+        throw new Error("主窗口不可用。");
+      }
+
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: "上传 Skill",
+        properties: ["openFile"],
+        filters: [
+          {
+            name: "ZIP archive",
+            extensions: ["zip"],
+          },
+        ],
+      });
+
+      if (result.canceled || !result.filePaths[0]) {
+        return {
+          cancelled: true,
+          snapshot: null,
+        };
+      }
+
+      const { skillDirectoryName } = await inspectUploadedSkillArchive(result.filePaths[0]);
+      const existingSnapshot = await loadCurrentSkillSnapshot();
+      const existingSkill = existingSnapshot.skills.find(
+        (skill) =>
+          skill.sourceKind === "personal" &&
+          getSkillDirectoryName(skill.skillRoot) === skillDirectoryName,
+      );
+      const destinationRoot = existingSkill
+        ? dirname(existingSkill.skillRoot)
+        : getPreferredPersonalSkillRoot();
+
+      let overwrite = false;
+      if (existingSkill) {
+        const confirmation = await dialog.showMessageBox(mainWindow, {
+          type: "warning",
+          buttons: ["取消", "覆盖"],
+          defaultId: 0,
+          cancelId: 0,
+          title: `覆盖 ${skillDirectoryName}`,
+          message: `已存在同名 Skill：${skillDirectoryName}`,
+          detail: "继续后会使用上传的压缩包覆盖现有 Skill。",
+        });
+
+        if (confirmation.response !== 1) {
+          return {
+            cancelled: true,
+            snapshot: null,
+          };
+        }
+
+        overwrite = true;
+      }
+
+      await installSkillFromArchive(destinationRoot, result.filePaths[0], overwrite);
+
+      return {
+        cancelled: false,
+        snapshot: await loadCurrentSkillSnapshot(),
+      };
+    },
+  );
+  ipcMain.handle(
+    "skills:get-remote-catalog",
+    async (): Promise<RemoteSkillCatalog> => {
+      return getRemoteSkillCatalog();
+    },
+  );
+  ipcMain.handle(
+    "skills:install-remote",
+    async (_event, skillId: string): Promise<SkillMutationResult> => {
+      if (!mainWindow) {
+        throw new Error("主窗口不可用。");
+      }
+
+      const existingSnapshot = await loadCurrentSkillSnapshot();
+      const existingSkill = existingSnapshot.skills.find(
+        (skill) =>
+          skill.sourceKind === "personal" &&
+          getSkillDirectoryName(skill.skillRoot) === skillId,
+      );
+      const destinationRoot = existingSkill
+        ? dirname(existingSkill.skillRoot)
+        : getPreferredPersonalSkillRoot();
+
+      let overwrite = false;
+      if (existingSkill) {
+        const confirmation = await dialog.showMessageBox(mainWindow, {
+          type: "warning",
+          buttons: ["取消", "覆盖"],
+          defaultId: 0,
+          cancelId: 0,
+          title: `覆盖 ${skillId}`,
+          message: `已存在同名 Skill：${skillId}`,
+          detail: "继续后会从 GitHub 下载并覆盖现有 Skill。",
+        });
+
+        if (confirmation.response !== 1) {
+          return {
+            cancelled: true,
+            snapshot: null,
+          };
+        }
+
+        overwrite = true;
+      }
+
+      await installRemoteSkill(skillId, destinationRoot, overwrite);
+
+      return {
+        cancelled: false,
+        snapshot: await loadCurrentSkillSnapshot(),
+      };
+    },
+  );
 
   ipcMain.handle("sidebar:open-worktree", (_event, projectPath: string): SidebarStateSnapshot => {
     return getWorktreeStateStore().openWorktree(projectPath);

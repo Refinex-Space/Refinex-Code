@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 import { CommandPalette } from "@renderer/components/command/command-palette";
 import { McpQuickAccessMenu } from "@renderer/components/mcp/mcp-quick-access-menu";
+import { SkillsHome } from "@renderer/components/skills/skills-home";
 import { AppearanceSettingsPanel } from "@renderer/components/settings/appearance-settings-panel";
 import { McpSettingsPanel } from "@renderer/components/settings/mcp-settings-panel";
 import { ProviderSettingsPanel } from "@renderer/components/settings/provider-settings-panel";
@@ -44,6 +45,8 @@ export function Layout() {
   const settingsSection = useUIStore((state) => state.settingsSection);
   const terminalOpen = useUIStore((state) => state.terminalOpen);
   const theme = useUIStore((state) => state.theme);
+  const openSkills = useUIStore((state) => state.openSkills);
+  const closeSkills = useUIStore((state) => state.closeSkills);
   const openSettings = useUIStore((state) => state.openSettings);
   const closeSettings = useUIStore((state) => state.closeSettings);
   const setSettingsSection = useUIStore((state) => state.setSettingsSection);
@@ -69,6 +72,7 @@ export function Layout() {
     removeWorktree,
   } = useDesktopShell();
   const isSettingsView = shellView === "settings";
+  const isSkillsView = shellView === "skills";
 
   const handleOpenWorkspace = async () => {
     try {
@@ -170,6 +174,8 @@ export function Layout() {
         ) : (
           <WorkspaceSidebar
             onOpenWorkspace={handleOpenWorkspace}
+            onShowWorkspace={closeSkills}
+            onOpenSkills={openSkills}
             onOpenSettings={() => openSettings("appearance")}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
             onSelectWorktree={selectWorktree}
@@ -177,6 +183,7 @@ export function Layout() {
             onSelectSession={selectSession}
             onRemoveSession={removeSession}
             onRemoveWorktree={removeWorktree}
+            isSkillsView={isSkillsView}
           />
         )}
         {sidebarOpen ? (
@@ -303,6 +310,8 @@ export function Layout() {
             ) : settingsSection === "mcp" ? (
               <McpSettingsPanel />
             ) : null
+          ) : isSkillsView ? (
+            <SkillsHome />
           ) : (
             <WorkspaceHome
               worktrees={worktrees}
@@ -314,7 +323,7 @@ export function Layout() {
           )}
         </main>
 
-        {terminalOpen && !isSettingsView ? (
+        {terminalOpen && !isSettingsView && !isSkillsView ? (
           <TerminalPanel
             sessionId={
               activeSession?.id ?? activeWorktree?.id ?? "global-shell"

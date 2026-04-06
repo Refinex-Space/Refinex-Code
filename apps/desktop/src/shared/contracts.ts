@@ -66,6 +66,88 @@ export interface SidebarStateSnapshot {
   storageRoot: string;
 }
 
+export type SkillSourceKind = "personal" | "project" | "plugin";
+
+export type SkillTreeNodeType = "directory" | "file";
+
+export interface SkillTreeNode {
+  id: string;
+  name: string;
+  path: string;
+  relativePath: string;
+  type: SkillTreeNodeType;
+  children?: SkillTreeNode[];
+}
+
+export interface SkillRecord {
+  id: string;
+  name: string;
+  displayName: string;
+  sourceKind: SkillSourceKind;
+  sourceLabel: string;
+  pluginName?: string;
+  skillRoot: string;
+  skillMdPath: string;
+  description: string;
+  whenToUse?: string;
+  version?: string;
+  userInvocable: boolean;
+  disableModelInvocation: boolean;
+  invokedBy: string;
+  addedBy: string;
+  lastUpdated: string;
+  tree: SkillTreeNode[];
+}
+
+export interface SkillSnapshot {
+  skills: SkillRecord[];
+  activeWorktreePath: string | null;
+  generatedAt: string;
+}
+
+export type SkillFilePreviewKind =
+  | "markdown"
+  | "text"
+  | "unsupported"
+  | "too_large";
+
+export interface SkillFilePreview {
+  path: string;
+  kind: SkillFilePreviewKind;
+  size: number;
+  content?: string;
+  language: string | null;
+  truncated?: boolean;
+}
+
+export interface SkillMutationResult {
+  cancelled: boolean;
+  snapshot: SkillSnapshot | null;
+}
+
+export interface SkillDownloadResult {
+  cancelled: boolean;
+  targetPath: string | null;
+}
+
+export interface SkillUploadResult {
+  cancelled: boolean;
+  snapshot: SkillSnapshot | null;
+}
+
+export interface RemoteSkillRecord {
+  id: string;
+  name: string;
+  description: string;
+  sourceLabel: string;
+  providerLabel: string;
+}
+
+export interface RemoteSkillCatalog {
+  skills: RemoteSkillRecord[];
+  fetchedAt: string;
+}
+
 export interface TerminalCreateInput {
   sessionId: string;
   cwd?: string | null;
@@ -97,6 +179,14 @@ export interface TerminalExitPayload {
 export interface DesktopBridge {
   getAppInfo: () => Promise<AppInfo>;
   getSidebarState: () => Promise<SidebarStateSnapshot>;
+  getSkillsSnapshot: () => Promise<SkillSnapshot>;
+  readSkillFile: (path: string) => Promise<SkillFilePreview>;
+  replaceSkill: (skillRoot: string) => Promise<SkillMutationResult>;
+  downloadSkill: (skillRoot: string) => Promise<SkillDownloadResult>;
+  uninstallSkill: (skillRoot: string) => Promise<SkillMutationResult>;
+  uploadSkill: () => Promise<SkillUploadResult>;
+  getRemoteSkillCatalog: () => Promise<RemoteSkillCatalog>;
+  installRemoteSkill: (skillId: string) => Promise<SkillMutationResult>;
   getAppearanceSettings: () => Promise<AppearanceSettingsSnapshot>;
   saveAppearanceSettings: (
     settings: AppearanceSettingsData,

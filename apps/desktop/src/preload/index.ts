@@ -4,12 +4,18 @@ import type {
   AppearanceSettingsData,
   AppearanceSettingsSnapshot,
   DesktopBridge,
+  SkillDownloadResult,
   DesktopMcpServerSaveInput,
   DesktopMcpServerToggleInput,
+  SkillMutationResult,
   DesktopMcpSettingsSnapshot,
   DesktopProviderSettingsSaveInput,
   DesktopProviderSettingsSnapshot,
   SessionCreateInput,
+  SkillFilePreview,
+  RemoteSkillCatalog,
+  SkillSnapshot,
+  SkillUploadResult,
   SidebarStateSnapshot,
   TerminalCreateInput,
   TerminalDataPayload,
@@ -20,6 +26,21 @@ import type {
 const desktopBridge: DesktopBridge = {
   getAppInfo: () => ipcRenderer.invoke("app:info") as Promise<AppInfo>,
   getSidebarState: () => ipcRenderer.invoke("sidebar:get-state") as Promise<SidebarStateSnapshot>,
+  getSkillsSnapshot: () => ipcRenderer.invoke("skills:get-snapshot") as Promise<SkillSnapshot>,
+  readSkillFile: (path: string) =>
+    ipcRenderer.invoke("skills:read-file", path) as Promise<SkillFilePreview>,
+  replaceSkill: (skillRoot: string) =>
+    ipcRenderer.invoke("skills:replace", skillRoot) as Promise<SkillMutationResult>,
+  downloadSkill: (skillRoot: string) =>
+    ipcRenderer.invoke("skills:download", skillRoot) as Promise<SkillDownloadResult>,
+  uninstallSkill: (skillRoot: string) =>
+    ipcRenderer.invoke("skills:uninstall", skillRoot) as Promise<SkillMutationResult>,
+  uploadSkill: () =>
+    ipcRenderer.invoke("skills:upload") as Promise<SkillUploadResult>,
+  getRemoteSkillCatalog: () =>
+    ipcRenderer.invoke("skills:get-remote-catalog") as Promise<RemoteSkillCatalog>,
+  installRemoteSkill: (skillId: string) =>
+    ipcRenderer.invoke("skills:install-remote", skillId) as Promise<SkillMutationResult>,
   getAppearanceSettings: () =>
     ipcRenderer.invoke("appearance-settings:get") as Promise<AppearanceSettingsSnapshot>,
   saveAppearanceSettings: (settings: AppearanceSettingsData) =>

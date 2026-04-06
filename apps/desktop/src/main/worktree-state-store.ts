@@ -304,6 +304,14 @@ export function createWorktreeStateStore({
     };
   }
 
+  function getActiveWorktreePath(): string | null {
+    const snapshot = getSnapshot();
+    const activeWorktree =
+      snapshot.worktrees.find((worktree) => worktree.id === snapshot.activeWorktreeId) ?? null;
+
+    return activeWorktree?.worktreePath ?? null;
+  }
+
   function createWorktreeId(worktreePath: string) {
     return createHash("sha1").update(worktreePath).digest("hex").slice(0, 12);
   }
@@ -521,6 +529,7 @@ export function createWorktreeStateStore({
 
   return {
     getSnapshot,
+    getActiveWorktreePath,
     openWorktree,
     selectWorktree,
     prepareSession,

@@ -4,6 +4,7 @@ import {
   FolderClosed,
   FolderOpen,
   FolderPlus,
+  Sparkles,
   Search,
   Settings2,
   SquarePen,
@@ -25,6 +26,8 @@ import {
 
 interface WorkspaceSidebarProps {
   onOpenWorkspace: () => Promise<unknown>;
+  onShowWorkspace: () => void;
+  onOpenSkills: () => void;
   onOpenSettings: () => void;
   onOpenCommandPalette: () => void;
   onSelectWorktree: (worktreeId: string) => Promise<unknown>;
@@ -32,10 +35,13 @@ interface WorkspaceSidebarProps {
   onSelectSession: (worktreeId: string, sessionId: string) => Promise<unknown>;
   onRemoveSession: (worktreeId: string, sessionId: string) => Promise<unknown>;
   onRemoveWorktree: (worktreeId: string) => Promise<unknown>;
+  isSkillsView: boolean;
 }
 
 export function WorkspaceSidebar({
   onOpenWorkspace,
+  onShowWorkspace,
+  onOpenSkills,
   onOpenSettings,
   onOpenCommandPalette,
   onSelectWorktree,
@@ -43,6 +49,7 @@ export function WorkspaceSidebar({
   onSelectSession,
   onRemoveSession,
   onRemoveWorktree,
+  isSkillsView,
 }: WorkspaceSidebarProps) {
   const worktrees = useWorktreeStore((state) => state.worktrees);
   const activeWorktreeId = useWorktreeStore((state) => state.activeWorktreeId);
@@ -76,6 +83,7 @@ export function WorkspaceSidebar({
             label="新线程"
             icon={SquarePen}
             onClick={() => {
+              onShowWorkspace();
               if (activeWorktree) {
                 runAction(() => onPrepareSession(activeWorktree.id));
                 return;
@@ -83,6 +91,12 @@ export function WorkspaceSidebar({
 
               runAction(onOpenWorkspace);
             }}
+          />
+          <SidebarActionButton
+            label="技能"
+            icon={Sparkles}
+            onClick={onOpenSkills}
+            active={isSkillsView}
           />
         </nav>
       </div>
@@ -158,6 +172,7 @@ export function WorkspaceSidebar({
                       <button
                         type="button"
                         onClick={() => {
+                          onShowWorkspace();
                           runAction(() => onSelectWorktree(worktree.id));
                           setCollapsedWorktrees((previous) => ({
                             ...previous,
@@ -215,6 +230,7 @@ export function WorkspaceSidebar({
                         label="在当前项目下新建线程"
                         icon={SquarePen}
                         onClick={() => {
+                          onShowWorkspace();
                           runAction(() => onPrepareSession(worktree.id));
                         }}
                       />
@@ -246,6 +262,7 @@ export function WorkspaceSidebar({
                                   updatedAt={session.lastOpenedAt}
                                   isActive={session.id === activeSessionId}
                                   onSelect={() => {
+                                    onShowWorkspace();
                                     runAction(() =>
                                       onSelectSession(worktree.id, session.id),
                                     );
@@ -269,7 +286,7 @@ export function WorkspaceSidebar({
         </div>
       </ScrollArea>
 
-      <div className="border-t border-[var(--color-border)] px-3 py-3">
+      <div className="border-[var(--color-border)] px-3 py-3">
         <SidebarActionButton
           label="设置"
           icon={Settings2}
@@ -284,12 +301,14 @@ interface SidebarActionButtonProps {
   label: string;
   icon: typeof SquarePen;
   onClick: () => void;
+  active?: boolean;
 }
 
 function SidebarActionButton({
   label,
   icon: Icon,
   onClick,
+  active = false,
 }: SidebarActionButtonProps) {
   return (
     <motion.button
@@ -298,10 +317,18 @@ function SidebarActionButton({
       whileHover={{ x: 1 }}
       whileTap={{ scale: 0.995 }}
       transition={{ duration: 0.14, ease: "easeOut" }}
-      className="flex w-full items-center gap-2.5 rounded-[10px] px-3 py-1.5 text-left text-[var(--color-fg)]/84 transition-colors duration-150 hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-fg)]"
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-[10px] px-3 py-1.5 text-left transition-colors duration-150",
+        active
+          ? "bg-[var(--color-sidebar-active)] text-[var(--color-fg)]"
+          : "text-[var(--color-fg)]/84 hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-fg)]",
+      )}
     >
       <Icon
-        className="h-[15px] w-[15px] shrink-0 text-[var(--color-muted)]"
+        className={cn(
+          "h-[15px] w-[15px] shrink-0",
+          active ? "text-[var(--color-fg)]/72" : "text-[var(--color-muted)]",
+        )}
         aria-hidden="true"
       />
       <span className="min-w-0 flex-1 truncate font-medium text-[length:var(--ui-font-size-md)] leading-5">

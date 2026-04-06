@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { vi } from "vitest";
 import { App } from "@renderer/app";
 import {
@@ -150,6 +150,323 @@ describe("desktop shell", () => {
     expect(
       await screen.findByPlaceholderText("先打开一个项目，再从左侧创建或选择线程"),
     ).toBeInTheDocument();
+  });
+
+  it("opens the skills view and previews skill files", async () => {
+    vi.mocked(window.desktopApp.getSkillsSnapshot).mockResolvedValue({
+      activeWorktreePath: null,
+      generatedAt: "2026-04-06T00:00:00.000Z",
+      skills: [
+        {
+          id: "personal:tech-rewrite",
+          name: "tech-rewrite",
+          displayName: "tech-rewrite",
+          sourceKind: "personal",
+          sourceLabel: "Personal skills",
+          skillRoot: "/Users/test/.agents/skills/tech-rewrite",
+          skillMdPath: "/Users/test/.agents/skills/tech-rewrite/SKILL.md",
+          description: "Rewrite technical material into structured docs.",
+          userInvocable: true,
+          disableModelInvocation: false,
+          invokedBy: "User or RWork",
+          addedBy: "User",
+          lastUpdated: "2026-04-05T00:00:00.000Z",
+          tree: [
+            {
+              id: "SKILL.md",
+              name: "SKILL.md",
+              path: "/Users/test/.agents/skills/tech-rewrite/SKILL.md",
+              relativePath: "SKILL.md",
+              type: "file",
+            },
+            {
+              id: "references",
+              name: "references",
+              path: "/Users/test/.agents/skills/tech-rewrite/references",
+              relativePath: "references",
+              type: "directory",
+              children: [
+                {
+                  id: "references/notes.md",
+                  name: "notes.md",
+                  path: "/Users/test/.agents/skills/tech-rewrite/references/notes.md",
+                  relativePath: "references/notes.md",
+                  type: "file",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    vi.mocked(window.desktopApp.readSkillFile).mockImplementation(async (path) => {
+      if (path.endsWith("notes.md")) {
+        return {
+          path,
+          kind: "text",
+          size: 20,
+          language: "markdown",
+          content: "reference notes",
+        };
+      }
+
+      return {
+        path,
+        kind: "markdown",
+        size: 64,
+        language: "markdown",
+        content: "# Technical Rewrite\n\nUse this skill carefully.",
+      };
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "技能" }));
+
+    expect(await screen.findByText("Skills")).toBeInTheDocument();
+    expect(screen.getAllByText("Personal skills").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Project skills")).not.toBeInTheDocument();
+    expect(screen.getAllByText("tech-rewrite").length).toBeGreaterThan(0);
+    expect(screen.getByText("Rewrite technical material into structured docs.")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "源码" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "源码" }));
+    expect(useUIStore.getState().skillsContentMode).toBe("source");
+
+    act(() => {
+      useUIStore.getState().selectSkillItem(
+        "personal:tech-rewrite",
+        "references/notes.md",
+      );
+    });
+
+    await waitFor(() => {
+      expect(window.desktopApp.readSkillFile).toHaveBeenCalledWith(
+        "/Users/test/.agents/skills/tech-rewrite/references/notes.md",
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "新线程" }));
+    expect(
+      await screen.findByPlaceholderText("先打开一个项目，再从左侧创建或选择线程"),
+    ).toBeInTheDocument();
+  });
+
+  it("opens the skill actions menu and forwards replace/download/uninstall", async () => {
+    vi.mocked(window.desktopApp.getSkillsSnapshot).mockResolvedValue({
+      activeWorktreePath: null,
+      generatedAt: "2026-04-06T00:00:00.000Z",
+      skills: [
+        {
+          id: "personal:harness-feat",
+          name: "harness-feat",
+          displayName: "harness-feat",
+          sourceKind: "personal",
+          sourceLabel: "Personal skills",
+          skillRoot: "/Users/test/.agents/skills/harness-feat",
+          skillMdPath: "/Users/test/.agents/skills/harness-feat/SKILL.md",
+          description: "Plan and execute features.",
+          userInvocable: true,
+          disableModelInvocation: false,
+          invokedBy: "User or RWork",
+          addedBy: "User",
+          lastUpdated: "2026-04-05T00:00:00.000Z",
+          tree: [],
+        },
+      ],
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "技能" }));
+
+    fireEvent.pointerDown(
+      await screen.findByRole("button", { name: "harness-feat 更多操作" }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "替换" }));
+
+    await waitFor(() => {
+      expect(window.desktopApp.replaceSkill).toHaveBeenCalledWith(
+        "/Users/test/.agents/skills/harness-feat",
+      );
+    });
+
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "harness-feat 更多操作" }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "下载" }));
+
+    await waitFor(() => {
+      expect(window.desktopApp.downloadSkill).toHaveBeenCalledWith(
+        "/Users/test/.agents/skills/harness-feat",
+      );
+    });
+
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "harness-feat 更多操作" }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "卸载" }));
+
+    await waitFor(() => {
+      expect(window.desktopApp.uninstallSkill).toHaveBeenCalledWith(
+        "/Users/test/.agents/skills/harness-feat",
+      );
+    });
+  });
+
+  it("opens the create menu and forwards uploaded skill archives", async () => {
+    vi.mocked(window.desktopApp.getSkillsSnapshot).mockResolvedValue({
+      activeWorktreePath: null,
+      generatedAt: "2026-04-06T00:00:00.000Z",
+      skills: [],
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "技能" }));
+
+    fireEvent.pointerDown(await screen.findByRole("button", { name: "新增技能" }));
+    fireEvent.click(await screen.findByText("创建 Skill"));
+    fireEvent.click(await screen.findByText("上传技能"));
+
+    await waitFor(() => {
+      expect(window.desktopApp.uploadSkill).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("opens the remote skills browser and installs a remote skill", async () => {
+    vi.mocked(window.desktopApp.getSkillsSnapshot).mockResolvedValue({
+      activeWorktreePath: null,
+      generatedAt: "2026-04-06T00:00:00.000Z",
+      skills: [],
+    });
+    vi.mocked(window.desktopApp.getRemoteSkillCatalog).mockResolvedValue({
+      fetchedAt: "2026-04-06T00:00:00.000Z",
+      skills: [
+        {
+          id: "skill-creator",
+          name: "skill-creator",
+          description: "Create new skills from structured guidance.",
+          sourceLabel: "Anthropic & Partners",
+          providerLabel: "Anthropic",
+        },
+      ],
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "技能" }));
+    fireEvent.pointerDown(await screen.findByRole("button", { name: "新增技能" }));
+    fireEvent.click(await screen.findByText("浏览 Skills"));
+
+    expect(await screen.findByText("Browse Skills")).toBeInTheDocument();
+    expect(await screen.findByText("/skill-creator")).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: "安装 skill-creator" }));
+
+    await waitFor(() => {
+      expect(window.desktopApp.installRemoteSkill).toHaveBeenCalledWith("skill-creator");
+    });
+  });
+
+  it("shows update instead of plus when the remote skill already exists locally", async () => {
+    vi.mocked(window.desktopApp.getSkillsSnapshot).mockResolvedValue({
+      activeWorktreePath: null,
+      generatedAt: "2026-04-06T00:00:00.000Z",
+      skills: [
+        {
+          id: "personal:skill-creator",
+          name: "skill-creator",
+          displayName: "skill-creator",
+          sourceKind: "personal",
+          sourceLabel: "Personal skills",
+          skillRoot: "/Users/test/.agents/skills/skill-creator",
+          skillMdPath: "/Users/test/.agents/skills/skill-creator/SKILL.md",
+          description: "Local installed skill.",
+          userInvocable: true,
+          disableModelInvocation: false,
+          invokedBy: "User or RWork",
+          addedBy: "User",
+          lastUpdated: "2026-04-05T00:00:00.000Z",
+          tree: [],
+        },
+      ],
+    });
+    vi.mocked(window.desktopApp.getRemoteSkillCatalog).mockResolvedValue({
+      fetchedAt: "2026-04-06T00:00:00.000Z",
+      skills: [
+        {
+          id: "skill-creator",
+          name: "skill-creator",
+          description: "Create new skills from structured guidance.",
+          sourceLabel: "Anthropic & Partners",
+          providerLabel: "Anthropic",
+        },
+      ],
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "技能" }));
+    fireEvent.pointerDown(await screen.findByRole("button", { name: "新增技能" }));
+    fireEvent.click(await screen.findByText("浏览 Skills"));
+
+    expect(await screen.findByRole("button", { name: "更新 skill-creator" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "安装 skill-creator" })).not.toBeInTheDocument();
+  });
+
+  it("filters skills with the search input", async () => {
+    vi.mocked(window.desktopApp.getSkillsSnapshot).mockResolvedValue({
+      activeWorktreePath: null,
+      generatedAt: "2026-04-06T00:00:00.000Z",
+      skills: [
+        {
+          id: "personal:tech-writing",
+          name: "tech-writing",
+          displayName: "tech-writing",
+          sourceKind: "personal",
+          sourceLabel: "Personal skills",
+          skillRoot: "/Users/test/.agents/skills/tech-writing",
+          skillMdPath: "/Users/test/.agents/skills/tech-writing/SKILL.md",
+          description: "Write long-form technical content.",
+          userInvocable: true,
+          disableModelInvocation: false,
+          invokedBy: "User or RWork",
+          addedBy: "User",
+          lastUpdated: "2026-04-05T00:00:00.000Z",
+          tree: [],
+        },
+        {
+          id: "personal:harness-feat",
+          name: "harness-feat",
+          displayName: "harness-feat",
+          sourceKind: "personal",
+          sourceLabel: "Personal skills",
+          skillRoot: "/Users/test/.agents/skills/harness-feat",
+          skillMdPath: "/Users/test/.agents/skills/harness-feat/SKILL.md",
+          description: "Implement new features with harness discipline.",
+          userInvocable: true,
+          disableModelInvocation: false,
+          invokedBy: "User or RWork",
+          addedBy: "User",
+          lastUpdated: "2026-04-05T00:00:00.000Z",
+          tree: [],
+        },
+      ],
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "技能" }));
+    fireEvent.click(screen.getByRole("button", { name: "搜索技能" }));
+
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "搜索技能或文件" }),
+      { target: { value: "harness" } },
+    );
+
+    expect(screen.getByText("harness-feat")).toBeInTheDocument();
+    expect(screen.getAllByText("tech-writing")).toHaveLength(1);
   });
 
   it("applies appearance settings in the fullscreen panel", async () => {

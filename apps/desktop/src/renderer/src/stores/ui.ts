@@ -33,8 +33,9 @@ export type {
   AppearanceSettingsData,
   ThemeMode,
 } from "../../../shared/appearance-settings";
-export type ShellView = "workspace" | "settings";
+export type ShellView = "workspace" | "skills" | "settings";
 export type SettingsSection = "appearance" | "provider" | "mcp";
+export type SkillsContentMode = "preview" | "source";
 
 export const DEFAULT_SIDEBAR_WIDTH = 258;
 export const MIN_SIDEBAR_WIDTH = 220;
@@ -79,6 +80,9 @@ export const defaultUIState = {
   commandPaletteOpen: false,
   terminalHeight: DEFAULT_TERMINAL_HEIGHT,
   theme: "system" as ThemeMode,
+  selectedSkillId: null as string | null,
+  selectedSkillNodeId: null as string | null,
+  skillsContentMode: "preview" as SkillsContentMode,
   pointerCursorEnabled: false,
   uiFontSize: DEFAULT_UI_FONT_SIZE,
   codeFontSize: DEFAULT_CODE_FONT_SIZE,
@@ -95,14 +99,21 @@ interface UIState {
   commandPaletteOpen: boolean;
   terminalHeight: number;
   theme: ThemeMode;
+  selectedSkillId: string | null;
+  selectedSkillNodeId: string | null;
+  skillsContentMode: SkillsContentMode;
   pointerCursorEnabled: boolean;
   uiFontSize: number;
   codeFontSize: number;
   colors: Record<AppearanceColorMode, AppearanceColorPalette>;
   appearanceSettingsHydrated: boolean;
   openSettings: (section?: SettingsSection) => void;
+  openSkills: () => void;
+  closeSkills: () => void;
   closeSettings: () => void;
   setSettingsSection: (section: SettingsSection) => void;
+  selectSkillItem: (skillId: string | null, nodeId?: string | null) => void;
+  setSkillsContentMode: (mode: SkillsContentMode) => void;
   toggleSidebar: () => void;
   setSidebarWidth: (width: number, viewportWidth?: number) => void;
   toggleTerminal: () => void;
@@ -130,6 +141,16 @@ export const useUIStore = create<UIState>((set) => ({
       settingsSection: section,
     });
   },
+  openSkills: () => {
+    set({
+      shellView: "skills",
+    });
+  },
+  closeSkills: () => {
+    set({
+      shellView: "workspace",
+    });
+  },
   closeSettings: () => {
     set({
       shellView: "workspace",
@@ -139,6 +160,15 @@ export const useUIStore = create<UIState>((set) => ({
     set({
       settingsSection: section,
     });
+  },
+  selectSkillItem: (selectedSkillId, selectedSkillNodeId = null) => {
+    set({
+      selectedSkillId,
+      selectedSkillNodeId,
+    });
+  },
+  setSkillsContentMode: (skillsContentMode) => {
+    set({ skillsContentMode });
   },
   toggleSidebar: () => {
     set((state) => ({ sidebarOpen: !state.sidebarOpen }));

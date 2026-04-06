@@ -187,3 +187,94 @@ select {
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
 }
+
+.skills-markdown {
+  color: color-mix(in srgb, var(--color-fg) 90%, transparent);
+  font-size: var(--ui-font-size-md);
+  line-height: 1.7;
+}
+
+.skills-preview-surface {
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity 120ms ease-out,
+    transform 120ms ease-out;
+}
+
+.skills-preview-surface.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.skills-markdown > :first-child {
+  margin-top: 0;
+}
+
+.skills-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.skills-markdown h1,
+.skills-markdown h2,
+.skills-markdown h3,
+.skills-markdown h4 {
+  margin: 1.6em 0 0.7em;
+  line-height: 1.2;
+  color: var(--color-fg);
+}
+
+.skills-markdown h1 {
+  font-size: 1.9em;
+}
+
+.skills-markdown h2 {
+  font-size: 1.45em;
+}
+
+.skills-markdown h3 {
+  font-size: 1.18em;
+}
+
+.skills-markdown p,
+.skills-markdown ul,
+.skills-markdown ol,
+.skills-markdown pre,
+.skills-markdown blockquote {
+  margin: 0 0 1em;
+}
+
+.skills-markdown ul,
+.skills-markdown ol {
+  padding-left: 1.4em;
+}
+
+.skills-markdown li + li {
+  margin-top: 0.3em;
+}
+
+.skills-markdown code {
+  border-radius: 8px;
+  background: var(--color-surface);
+  padding: 0.15em 0.35em;
+  font-family: var(--font-mono);
+}
+
+.skills-markdown pre {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+  padding: 1rem 1.1rem;
+}
+
+.skills-markdown pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.skills-markdown blockquote {
+  border-left: 3px solid var(--color-border);
+  padding-left: 1em;
+  color: var(--color-muted);
+}
