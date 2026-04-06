@@ -12,7 +12,7 @@
 
 ## Active Plan Entry Points
 
-- [Desktop Skills Manager](docs/exec-plans/active/desktop-skills-manager.md)
+- No active plans
 
 ## Rules
 

@@ -1,3 +1,8 @@
+> ✅ Completed: 2026-04-06
+> Summary: desktop skills manager delivered and validated
+> Duration: TBD
+> Key learnings: TBD
+
 # desktop skills manager
 
 ## Metadata
