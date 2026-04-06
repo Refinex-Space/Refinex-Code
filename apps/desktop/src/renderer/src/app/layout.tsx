@@ -45,7 +45,7 @@ export function Layout() {
     (state) => state.setCommandPaletteOpen,
   );
   const [isSidebarResizing, setIsSidebarResizing] = useState(false);
-  const storageRoot = useWorktreeStore((state) => state.storageRoot);
+  const worktrees = useWorktreeStore((state) => state.worktrees);
   const activeWorktree = useWorktreeStore((state) => findActiveWorktree(state));
   const activeSession = useWorktreeStore((state) => findActiveSession(state));
   const {
@@ -280,15 +280,11 @@ export function Layout() {
 
         <main className="min-h-0 flex-1 px-4 pb-4">
           <WorkspaceHome
-            appInfo={appInfo}
+            worktrees={worktrees}
             activeWorktree={activeWorktree}
             activeSession={activeSession}
-            storageRoot={storageRoot}
             onOpenWorkspace={handleOpenWorkspace}
-            onRevealWorkspace={handleRevealWorkspace}
-            onToggleTerminal={toggleTerminal}
-            onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-            onPrepareSession={prepareSession}
+            onSelectWorktree={selectWorktree}
           />
         </main>
 

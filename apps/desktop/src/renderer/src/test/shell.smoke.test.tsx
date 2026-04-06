@@ -11,11 +11,16 @@ describe("desktop shell", () => {
   it("renders the shell frame and bootstrap content", async () => {
     render(<App />);
 
-    expect(await screen.findByText("RWork shell is up")).toBeInTheDocument();
+    expect(await screen.findByText("开始构建")).toBeInTheDocument();
     const header = screen.getByRole("banner");
+    const main = screen.getByRole("main");
     expect(within(header).queryByRole("button", { name: "Open Project" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
-    expect(screen.getByText("Shipped in this slice")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "RWork logo" })).toBeInTheDocument();
+    expect(within(main).getByText("选择项目")).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("先打开一个项目，再从左侧创建或选择线程"),
+    ).toBeInTheDocument();
   });
 
   it("renders persisted worktrees and threads in the sidebar", async () => {
@@ -69,11 +74,22 @@ describe("desktop shell", () => {
     });
 
     render(<App />);
+    const main = screen.getByRole("main");
 
     expect((await screen.findAllByText("Thread 02")).length).toBeGreaterThan(0);
-    expect(screen.getByText("alpha")).toBeInTheDocument();
+    const projectTrigger = within(main).getByText("alpha");
+    expect(projectTrigger).toBeInTheDocument();
     expect(screen.getByText("Thread 01")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "搜索会话" })).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("描述下一步要做的事，Enter 发送，Shift+Enter 换行"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "切换模型（TODO）" })).toBeInTheDocument();
+    fireEvent.click(projectTrigger);
+    expect(
+      await screen.findByPlaceholderText("Search projects"),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("添加新项目")).toBeInTheDocument();
   });
 
   it("keeps the sidebar toggle interactive after collapsing", async () => {
