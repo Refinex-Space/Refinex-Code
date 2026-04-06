@@ -38,7 +38,7 @@ export function useKeyboardShortcuts() {
         return;
       }
 
-      if (event.key === "`") {
+      if (!event.shiftKey && key === "t") {
         event.preventDefault();
         toggleTerminal();
         return;

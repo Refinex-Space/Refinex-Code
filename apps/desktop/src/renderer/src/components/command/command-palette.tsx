@@ -74,7 +74,7 @@ export function CommandPalette({
       id: "terminal.toggle",
       label: terminalOpen ? "Hide terminal" : "Show terminal",
       keywords: ["terminal", "shell"],
-      shortcut: "cmd+`",
+      shortcut: "cmd+t",
       group: "Window",
       run: toggleTerminal,
     },

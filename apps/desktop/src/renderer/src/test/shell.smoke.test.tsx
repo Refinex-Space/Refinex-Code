@@ -1,6 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { vi } from "vitest";
 import { App } from "@renderer/app";
+import {
+  DEFAULT_SIDEBAR_WIDTH,
+  useUIStore,
+} from "@renderer/stores/ui";
 import { emptySidebarState } from "@renderer/stores/worktree";
 
 describe("desktop shell", () => {
@@ -8,9 +12,9 @@ describe("desktop shell", () => {
     render(<App />);
 
     expect(await screen.findByText("RWork shell is up")).toBeInTheDocument();
-    expect(
-      screen.getAllByRole("button", { name: "Open project" }).length,
-    ).toBeGreaterThan(0);
+    const header = screen.getByRole("banner");
+    expect(within(header).queryByRole("button", { name: "Open Project" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
     expect(screen.getByText("Shipped in this slice")).toBeInTheDocument();
   });
 
@@ -69,8 +73,62 @@ describe("desktop shell", () => {
     expect((await screen.findAllByText("Thread 02")).length).toBeGreaterThan(0);
     expect(screen.getByText("alpha")).toBeInTheDocument();
     expect(screen.getByText("Thread 01")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "搜索会话" })).toBeInTheDocument();
+  });
+
+  it("keeps the sidebar toggle interactive after collapsing", async () => {
+    useUIStore.setState({
+      sidebarOpen: true,
+      sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
+      terminalOpen: false,
+      commandPaletteOpen: false,
+      terminalHeight: 300,
+      theme: "system",
+    });
+
+    render(<App />);
+
+    const collapseButton = await screen.findByRole("button", {
+      name: "Collapse sidebar",
+    });
+    const terminalButton = screen.getByRole("button", {
+      name: "Show terminal",
+    });
+
     expect(
-      screen.getByRole("button", { name: "搜索会话" }),
+      collapseButton.compareDocumentPosition(terminalButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+
+    fireEvent.click(collapseButton);
+    const expandButton = await screen.findByRole("button", {
+      name: "Expand sidebar",
+    });
+
+    expect(
+      expandButton.compareDocumentPosition(terminalButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+
+    fireEvent.click(expandButton);
+
+    expect(
+      await screen.findByRole("button", { name: "Collapse sidebar" }),
+    ).toBeInTheDocument();
+  });
+
+  it("toggles terminal with cmd+t", async () => {
+    render(<App />);
+    const header = screen.getByRole("banner");
+
+    expect(
+      await within(header).findByRole("button", { name: "Show terminal" }),
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "t", metaKey: true });
+
+    expect(
+      await within(header).findByRole("button", { name: "Hide terminal" }),
     ).toBeInTheDocument();
   });
 });

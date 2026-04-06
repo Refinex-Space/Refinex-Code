@@ -2,7 +2,7 @@ import { Tooltip as RadixTooltip } from "@radix-ui/themes";
 import type { ReactNode } from "react";
 
 interface TooltipProps {
-  content: string;
+  content: ReactNode;
   children: ReactNode;
 }
 
