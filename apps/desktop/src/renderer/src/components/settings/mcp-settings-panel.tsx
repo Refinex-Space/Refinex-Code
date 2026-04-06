@@ -625,26 +625,25 @@ function EditorView({
                 ariaLabel="MCP 启动参数"
                 value={draft.argsText}
                 onChange={(value) => updateDraft({ argsText: value })}
-                placeholder="-y\n@upstash/context7-mcp"
+                placeholder={"-y\n@upstash/context7-mcp"}
               />
             }
           />
 
-          <SettingRow
+          <SettingBlock
             icon={Cog}
             label="环境变量"
             description="用于为本地命令注入凭证或运行参数；留空的行不会写入配置。"
-            control={
-              <KeyValueEditor
-                ariaLabel="环境变量"
-                pairs={draft.env}
-                addLabel="添加环境变量"
-                emptyKeyLabel="变量名"
-                emptyValueLabel="变量值"
-                onChange={(env) => updateDraft({ env })}
-              />
-            }
-          />
+          >
+            <KeyValueEditor
+              ariaLabel="环境变量"
+              pairs={draft.env}
+              addLabel="添加环境变量"
+              emptyKeyLabel="变量名"
+              emptyValueLabel="变量值"
+              onChange={(env) => updateDraft({ env })}
+            />
+          </SettingBlock>
         </>
       ) : (
         <>
@@ -662,21 +661,20 @@ function EditorView({
             }
           />
 
-          <SettingRow
+          <SettingBlock
             icon={Cog}
             label="请求头"
             description="用于附带鉴权或工作区标识；留空的行不会写入配置。"
-            control={
-              <KeyValueEditor
-                ariaLabel="请求头"
-                pairs={draft.headers}
-                addLabel="添加请求头"
-                emptyKeyLabel="Header 名称"
-                emptyValueLabel="Header 值"
-                onChange={(headers) => updateDraft({ headers })}
-              />
-            }
-          />
+          >
+            <KeyValueEditor
+              ariaLabel="请求头"
+              pairs={draft.headers}
+              addLabel="添加请求头"
+              emptyKeyLabel="Header 名称"
+              emptyValueLabel="Header 值"
+              onChange={(headers) => updateDraft({ headers })}
+            />
+          </SettingBlock>
         </>
       )}
     </section>
@@ -696,15 +694,10 @@ function ServerRow({
 }) {
   return (
     <div className="grid gap-4 border-t border-[var(--color-border)] px-5 py-4 sm:grid-cols-[minmax(0,1fr)_180px] sm:items-center">
-      <div className="flex min-w-0 items-start gap-3">
-        <button
-          type="button"
-          onClick={onEdit}
-          aria-label={`编辑 ${server.name}`}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)] transition-colors duration-150 hover:text-[var(--color-fg)]"
-        >
-          <Cog className="h-4 w-4" aria-hidden="true" />
-        </button>
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-surface)] text-[var(--color-muted)]">
+          <Server className="h-4 w-4" aria-hidden="true" />
+        </div>
 
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -713,16 +706,18 @@ function ServerRow({
             </div>
             <TransportBadge>{server.transportLabel}</TransportBadge>
           </div>
-          <div className="mt-1 truncate text-[length:var(--ui-font-size-sm)] text-[var(--color-muted)]">
-            {server.summary}
-          </div>
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3 sm:justify-end">
-        <span className="text-[length:var(--ui-font-size-sm)] text-[var(--color-muted)]">
-          {server.enabled ? "已启用" : "已停用"}
-        </span>
+      <div className="flex items-center justify-end gap-3">
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label={`编辑 ${server.name}`}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)] transition-colors duration-150 hover:text-[var(--color-fg)]"
+        >
+          <Cog className="h-4 w-4" aria-hidden="true" />
+        </button>
         <SwitchControl
           label={`${server.name} 启用状态`}
           checked={server.enabled}
@@ -762,6 +757,38 @@ function SettingRow({
       </div>
 
       <div className="w-full min-w-0 sm:w-[320px]">{control}</div>
+    </div>
+  );
+}
+
+function SettingBlock({
+  icon: Icon,
+  label,
+  description,
+  children,
+}: {
+  icon: typeof Server;
+  label: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="border-t border-[var(--color-border)] px-5 py-4">
+      <div className="flex min-w-0 items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-surface)] text-[var(--color-muted)]">
+          <Icon className="h-4 w-4" aria-hidden="true" />
+        </div>
+        <div className="min-w-0">
+          <div className="text-[length:var(--ui-font-size-md)] font-medium text-[var(--color-fg)]">
+            {label}
+          </div>
+          <div className="mt-1 text-[length:var(--ui-font-size-sm)] text-[var(--color-muted)]">
+            {description}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4">{children}</div>
     </div>
   );
 }
@@ -836,10 +863,10 @@ function TransportPicker({
             aria-label={option.label}
             onClick={() => onChange(option.value)}
             className={cn(
-              "rounded-[14px] px-2 py-2 text-center text-[length:var(--ui-font-size-xs)] font-medium transition-colors duration-150",
+              "rounded-[14px] border px-2 py-2 text-center text-[length:var(--ui-font-size-xs)] font-medium transition-colors duration-150",
               active
-                ? "bg-[var(--color-panel)] text-[var(--color-fg)]"
-                : "text-[var(--color-muted)] hover:text-[var(--color-fg)]",
+                ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
+                : "border-transparent text-[var(--color-muted)] hover:text-[var(--color-fg)]",
             )}
           >
             {option.label}

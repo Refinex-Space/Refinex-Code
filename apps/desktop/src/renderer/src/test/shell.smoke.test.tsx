@@ -305,6 +305,31 @@ describe("desktop shell", () => {
     });
   });
 
+  it("opens the header MCP quick menu, toggles a server, and jumps to MCP settings", async () => {
+    render(<App />);
+    const header = screen.getByRole("banner");
+
+    fireEvent.click(
+      await within(header).findByRole("button", { name: "Open MCP quick menu" }),
+    );
+
+    expect(await screen.findByText("MCP")).toBeInTheDocument();
+    expect(screen.getByText("context7")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("switch", { name: "context7 quick toggle" }));
+
+    await waitFor(() => {
+      expect(window.desktopApp.toggleMcpServer).toHaveBeenCalledWith({
+        name: "context7",
+        enabled: false,
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "打开 MCP 设置" }));
+
+    expect(await screen.findByRole("heading", { name: "MCP 服务器" })).toBeInTheDocument();
+  });
+
   it("renders MCP settings and saves a new stdio server", async () => {
     render(<App />);
 

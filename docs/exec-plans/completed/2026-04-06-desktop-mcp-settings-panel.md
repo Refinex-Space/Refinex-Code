@@ -18,7 +18,7 @@
   - 不重做 CLI `/mcp` TUI，本次仅实现桌面端设置体验
 - **Rollback**: Git revert or restore the modified files
 - **Roadmap entry**: `docs/PLANS.md`
-- **Plan path**: `docs/exec-plans/completed/desktop-mcp-settings-panel.md`
+- **Plan path**: `docs/exec-plans/completed/2026-04-06-desktop-mcp-settings-panel.md`
 
 ## Harness Preflight
 

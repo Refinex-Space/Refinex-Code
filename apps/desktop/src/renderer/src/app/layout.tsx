@@ -14,6 +14,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { CommandPalette } from "@renderer/components/command/command-palette";
+import { McpQuickAccessMenu } from "@renderer/components/mcp/mcp-quick-access-menu";
 import { AppearanceSettingsPanel } from "@renderer/components/settings/appearance-settings-panel";
 import { McpSettingsPanel } from "@renderer/components/settings/mcp-settings-panel";
 import { ProviderSettingsPanel } from "@renderer/components/settings/provider-settings-panel";
@@ -221,6 +222,8 @@ export function Layout() {
                   )}
                 </Button>
               </Tooltip>
+
+              <McpQuickAccessMenu onOpenSettings={() => openSettings("mcp")} />
 
               <Tooltip
                 content={
