@@ -234,29 +234,30 @@ describe("desktop shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "供应商" }));
 
     expect(await screen.findByRole("heading", { name: "供应商" })).toBeInTheDocument();
+    await screen.findByText("使用当前 Claude 登录状态");
     expect(screen.getByRole("button", { name: "Codex" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Claude" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Codex" }));
-    fireEvent.change(screen.getByLabelText("Codex Base URL"), {
+    fireEvent.change(screen.getByLabelText("Codex 接口地址"), {
       target: { value: "https://gateway.example.com/v1" },
     });
     fireEvent.change(screen.getByLabelText("Codex 默认模型"), {
       target: { value: "gpt-5.4" },
     });
-    fireEvent.change(screen.getByLabelText("Codex Verbosity"), {
+    fireEvent.change(screen.getByLabelText("Codex 输出详细程度"), {
       target: { value: "high" },
     });
-    fireEvent.change(screen.getByLabelText("Codex Reasoning Effort"), {
+    fireEvent.change(screen.getByLabelText("Codex 推理强度"), {
       target: { value: "high" },
     });
-    fireEvent.change(screen.getByLabelText("Codex Context Window"), {
+    fireEvent.change(screen.getByLabelText("Codex 上下文窗口"), {
       target: { value: "300000" },
     });
-    fireEvent.change(screen.getByLabelText("Codex Auto Compact Trigger"), {
+    fireEvent.change(screen.getByLabelText("Codex 自动压缩阈值"), {
       target: { value: "240000" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "保存 Codex 配置" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() => {
       expect(window.desktopApp.saveProviderSettings).toHaveBeenCalledWith({
@@ -272,12 +273,30 @@ describe("desktop shell", () => {
     });
   });
 
+  it("opens the Codex config file menu and reveals the selected file", async () => {
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "设置" }));
+    fireEvent.click(screen.getByRole("button", { name: "供应商" }));
+    await screen.findByText("使用当前 Claude 登录状态");
+    fireEvent.click(screen.getByRole("button", { name: "Codex" }));
+    await screen.findByLabelText("Codex 接口地址");
+    fireEvent.click(screen.getByRole("button", { name: "打开配置" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "auth.json" }));
+
+    await waitFor(() => {
+      expect(window.desktopApp.showItemInFolder).toHaveBeenCalledWith(
+        "/Users/test/.claude/auth.json",
+      );
+    });
+  });
+
   it("switches back to Claude from the provider settings panel", async () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "设置" }));
     fireEvent.click(screen.getByRole("button", { name: "供应商" }));
-    fireEvent.click(await screen.findByRole("button", { name: "保存并切换到 Claude" }));
+    fireEvent.click(await screen.findByRole("button", { name: "保存" }));
 
     await waitFor(() => {
       expect(window.desktopApp.saveProviderSettings).toHaveBeenCalledWith({

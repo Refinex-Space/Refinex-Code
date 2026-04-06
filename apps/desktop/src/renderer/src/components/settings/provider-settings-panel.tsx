@@ -1,19 +1,25 @@
 import {
   Bot,
   BrainCircuit,
+  ChevronDown,
   KeyRound,
   Link2,
-  PlugZap,
   Save,
+  ScanText,
   SlidersHorizontal,
 } from "lucide-react";
-import { useEffect, useState, type HTMLAttributes, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type HTMLAttributes,
+  type ReactNode,
+} from "react";
 import { toast } from "sonner";
 import { Button } from "@renderer/components/ui/button";
 import { ScrollArea } from "@renderer/components/ui/scroll-area";
 import { cn } from "@renderer/lib/cn";
 import type {
-  CodexProviderDraft,
   DesktopProviderId,
   DesktopProviderSettingsSnapshot,
   ProviderReasoningEffort,
@@ -28,6 +34,30 @@ import {
   normalizeCodexVerbosity,
 } from "../../../../shared/provider-settings";
 
+const claudeLogoUrl = new URL(
+  "../../../../../resources/provider-logos/claude.svg",
+  import.meta.url,
+).href;
+
+const openAiLogoUrl = new URL(
+  "../../../../../resources/provider-logos/open-ai.svg",
+  import.meta.url,
+).href;
+
+const verbosityLabels: Record<ProviderVerbosity, string> = {
+  low: "精简",
+  medium: "标准",
+  high: "详细",
+};
+
+const reasoningLabels: Record<ProviderReasoningEffort, string> = {
+  minimal: "最轻",
+  low: "较低",
+  medium: "标准",
+  high: "高",
+  xhigh: "最高",
+};
+
 interface CodexDraftForm {
   baseUrl: string;
   apiKey: string;
@@ -39,11 +69,24 @@ interface CodexDraftForm {
   hasStoredCredential: boolean;
 }
 
+interface ProviderFileEntry {
+  id: string;
+  label: string;
+  path: string;
+}
+
 function supportsProviderSettingsBridge() {
   return (
     typeof window !== "undefined" &&
     typeof window.desktopApp?.getProviderSettings === "function" &&
     typeof window.desktopApp?.saveProviderSettings === "function"
+  );
+}
+
+function supportsFinderBridge() {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.desktopApp?.showItemInFolder === "function"
   );
 }
 
@@ -69,6 +112,21 @@ function parseOptionalPositiveInteger(value: string) {
 
   const parsed = Number.parseInt(trimmed, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function getModelDescription(modelId: string) {
+  switch (modelId) {
+    case "gpt-5.4":
+      return "通用默认选择";
+    case "gpt-5.3-codex":
+      return "更偏代码任务";
+    case "gpt-5.4-mini":
+      return "更快、更轻量";
+    case "gpt-5-pro":
+      return "面向最复杂问题";
+    default:
+      return "可用于 Codex";
+  }
 }
 
 export function ProviderSettingsPanel() {
@@ -123,7 +181,7 @@ export function ProviderSettingsPanel() {
 
   const handleSave = async () => {
     if (!supportsProviderSettingsBridge()) {
-      toast.error("供应商设置 bridge 不可用，请重启桌面进程。");
+      toast.error("供应商设置接口不可用，请重启桌面进程。");
       return;
     }
 
@@ -157,8 +215,8 @@ export function ProviderSettingsPanel() {
       setCodexDraft(toCodexDraft(nextSnapshot));
       toast.success(
         selectedProviderId === "anthropic"
-          ? "已切换到 Claude 供应商"
-          : `已保存 Codex 配置并激活 ${nextSnapshot.codex.defaultModel}`,
+          ? "已切换到 Claude"
+          : `已保存并启用 ${nextSnapshot.codex.defaultModel}`,
       );
     } catch (saveError) {
       const message =
@@ -172,13 +230,13 @@ export function ProviderSettingsPanel() {
 
   return (
     <ScrollArea className="h-[calc(100vh-var(--titlebar-height))]">
-      <div className="mx-auto flex w-full max-w-[960px] flex-col gap-6 px-6 pt-4 pb-10">
+      <div className="mx-auto flex w-full max-w-[900px] flex-col gap-6 px-6 pt-4 pb-10">
         <div className="space-y-1">
           <h1 className="text-[length:var(--ui-font-size-xl)] font-semibold tracking-[-0.03em] text-[var(--color-fg)]">
             供应商
           </h1>
           <p className="text-[length:var(--ui-font-size-sm)] text-[var(--color-muted)]">
-            将现有 `/provider` 的 Anthropic 与 Codex 配置能力映射到桌面设置面板。
+            管理 Claude 与 Codex 的使用方式、连接信息和默认模型。
           </p>
         </div>
 
@@ -189,7 +247,7 @@ export function ProviderSettingsPanel() {
                 供应商配置
               </div>
               <div className="text-[length:var(--ui-font-size-sm)] text-[var(--color-muted)]">
-                供应商切换会写入与 CLI `/provider` 相同的用户级配置文件。
+                选择当前使用的服务商，并保存对应的模型与连接设置。
               </div>
             </div>
 
@@ -199,9 +257,17 @@ export function ProviderSettingsPanel() {
               aria-label="供应商切换"
             >
               {[
-                { id: "anthropic", label: "Claude", icon: Bot },
-                { id: "codex", label: "Codex", icon: PlugZap },
-              ].map(({ id, label, icon: Icon }) => {
+                {
+                  id: "anthropic",
+                  label: "Claude",
+                  logoUrl: claudeLogoUrl,
+                },
+                {
+                  id: "codex",
+                  label: "Codex",
+                  logoUrl: openAiLogoUrl,
+                },
+              ].map(({ id, label, logoUrl }) => {
                 const active = selectedProviderId === id;
 
                 return (
@@ -212,13 +278,18 @@ export function ProviderSettingsPanel() {
                     aria-label={label}
                     onClick={() => setSelectedProviderId(id as DesktopProviderId)}
                     className={cn(
-                      "inline-flex items-center gap-2 rounded-full px-3 py-2 text-[length:var(--ui-font-size-sm)] font-medium transition-colors duration-150",
+                      "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[length:var(--ui-font-size-sm)] font-medium transition-colors duration-150",
                       active
-                        ? "bg-[var(--color-panel)] text-[var(--color-fg)] shadow-[0_8px_20px_rgba(15,23,42,0.08)]"
-                        : "text-[var(--color-muted)] hover:text-[var(--color-fg)]",
+                        ? "border-[var(--color-border)] bg-[var(--color-panel)] text-[var(--color-fg)]"
+                        : "border-transparent text-[var(--color-muted)] hover:text-[var(--color-fg)]",
                     )}
                   >
-                    <Icon className="h-4 w-4" aria-hidden="true" />
+                    <img
+                      src={logoUrl}
+                      alt=""
+                      className="h-4 w-4 shrink-0 object-contain"
+                      aria-hidden="true"
+                    />
                     <span>{label}</span>
                   </button>
                 );
@@ -234,8 +305,8 @@ export function ProviderSettingsPanel() {
             <>
               {snapshot.warning ? (
                 <InlineNotice>
-                  当前 `settings.json` 指向了未知 provider，面板已按可支持的
-                  Anthropic/Codex 语义进行回退展示。
+                  当前配置指向了暂不支持在桌面端编辑的供应商，面板已按 Claude /
+                  Codex 的可用内容展示。
                 </InlineNotice>
               ) : null}
 
@@ -254,21 +325,17 @@ export function ProviderSettingsPanel() {
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-border)] px-5 py-4">
                 <div className="text-[length:var(--ui-font-size-sm)] text-[var(--color-muted)]">
                   {selectedProviderId === "anthropic"
-                    ? "保存后会切换到内建 Anthropic provider，并清理 Codex 专属运行时设置。"
-                    : "保存后会更新 providers.json、auth.json 与 settings.json，并立即激活 Codex。"}
+                    ? "保存后将切换回 Claude，并恢复内建供应商设置。"
+                    : "保存后将立即启用 Codex，并使用这里填写的连接与模型设置。"}
                 </div>
                 <Button
                   variant="primary"
                   onClick={() => void handleSave()}
                   disabled={saving}
-                  className="rounded-xl"
+                  className="rounded-xl shadow-none"
                 >
                   <Save className="h-4 w-4" aria-hidden="true" />
-                  {saving
-                    ? "保存中…"
-                    : selectedProviderId === "anthropic"
-                      ? "保存并切换到 Claude"
-                      : "保存 Codex 配置"}
+                  {saving ? "保存中…" : "保存"}
                 </Button>
               </div>
             </>
@@ -289,53 +356,27 @@ function AnthropicProviderView({
   snapshot: DesktopProviderSettingsSnapshot;
 }) {
   return (
-    <div className="px-5 py-5">
-      <div className="rounded-[18px] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-panel)] text-[var(--color-accent)] shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
-            <Bot className="h-5 w-5" aria-hidden="true" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="text-[length:var(--ui-font-size-lg)] font-semibold text-[var(--color-fg)]">
-                Claude
-              </div>
-              {snapshot.anthropic.isActive ? <ActiveBadge /> : null}
-            </div>
-            <div className="mt-1 text-[length:var(--ui-font-size-sm)] text-[var(--color-muted)]">
-              {snapshot.anthropic.description}
-            </div>
-          </div>
-        </div>
+    <div>
+      <ProviderOverviewRow
+        logoUrl={claudeLogoUrl}
+        title="Claude"
+        description="使用 Claude 内建服务与现有登录状态，无需单独填写接口地址或 API 密钥。"
+        active={snapshot.anthropic.isActive}
+      />
 
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <InfoTile
-            icon={PlugZap}
-            label="驱动"
-            value="Anthropic Messages"
-          />
-          <InfoTile
-            icon={Link2}
-            label="基础地址"
-            value={snapshot.anthropic.baseUrl}
-          />
-          <InfoTile
-            icon={BrainCircuit}
-            label="默认模型"
-            value={snapshot.anthropic.defaultModel}
-          />
-          <InfoTile
-            icon={SlidersHorizontal}
-            label="默认推理强度"
-            value={snapshot.anthropic.defaultReasoningEffort}
-          />
-        </div>
+      <SettingRow
+        icon={Bot}
+        label="连接方式"
+        description="沿用应用内建的 Claude 服务与认证流程。"
+        control={<StaticValue>使用当前 Claude 登录状态</StaticValue>}
+      />
 
-        <div className="mt-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-[length:var(--ui-font-size-sm)] text-[var(--color-muted)]">
-          Anthropic 在当前 `/provider` 语义下没有额外的 provider 文件表单项。
-          认证与登录仍沿用现有 CLI 流程或环境变量。
-        </div>
-      </div>
+      <SettingRow
+        icon={BrainCircuit}
+        label="默认模型"
+        description="切换回 Claude 后，应用会恢复使用内建默认模型。"
+        control={<StaticValue>{snapshot.anthropic.defaultModel}</StaticValue>}
+      />
     </div>
   );
 }
@@ -383,149 +424,275 @@ function CodexProviderView({
     });
   };
 
+  const configFiles: ProviderFileEntry[] = [
+    {
+      id: "providers",
+      label: "providers.json",
+      path: snapshot.paths.providersPath,
+    },
+    {
+      id: "auth",
+      label: "auth.json",
+      path: snapshot.paths.authPath,
+    },
+    {
+      id: "settings",
+      label: "settings.json",
+      path: snapshot.paths.settingsPath,
+    },
+  ];
+
   return (
-    <div className="px-5 py-5">
-      <div className="space-y-4">
-        <div className="flex items-start gap-3 rounded-[18px] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-panel)] text-[var(--color-accent)] shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
-            <PlugZap className="h-5 w-5" aria-hidden="true" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="text-[length:var(--ui-font-size-lg)] font-semibold text-[var(--color-fg)]">
-                Codex
-              </div>
-              {snapshot.codex.isActive ? <ActiveBadge /> : null}
-            </div>
-            <div className="mt-1 text-[length:var(--ui-font-size-sm)] text-[var(--color-muted)]">
-              {snapshot.codex.description}
-            </div>
-          </div>
-        </div>
+    <div>
+      <ProviderOverviewRow
+        logoUrl={openAiLogoUrl}
+        title="Codex"
+        description="通过 OpenAI 兼容接口接入 Codex。你可以在这里设置接口地址、密钥和默认模型。"
+        active={snapshot.codex.isActive}
+        action={<ConfigFilesMenu files={configFiles} />}
+      />
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <FieldBlock
-            icon={Link2}
-            label="Base URL"
-            description="OpenAI Responses 兼容网关地址，会写入 providers.json。"
-          >
-            <TextInput
-              ariaLabel="Codex Base URL"
-              value={draft.baseUrl}
-              onChange={(value) => updateDraft({ baseUrl: value })}
-              placeholder="https://api.openai.com/v1"
-            />
-          </FieldBlock>
+      <SettingRow
+        icon={Link2}
+        label="接口地址"
+        description="Codex 使用的 OpenAI 兼容接口地址。"
+        control={
+          <TextInput
+            ariaLabel="Codex 接口地址"
+            value={draft.baseUrl}
+            onChange={(value) => updateDraft({ baseUrl: value })}
+            placeholder="https://api.openai.com/v1"
+          />
+        }
+      />
 
-          <FieldBlock
-            icon={KeyRound}
-            label="API Key"
-            description={
-              draft.hasStoredCredential
-                ? "留空则保留现有 auth.json 凭证；填写时会覆盖为新的 API Key。"
-                : "首次配置时必填，会写入 auth.json。"
+      <SettingRow
+        icon={KeyRound}
+        label="API 密钥"
+        description={
+          draft.hasStoredCredential
+            ? "留空会继续使用当前已保存的密钥；重新填写会覆盖原有值。"
+            : "首次启用 Codex 时需要填写 API 密钥。"
+        }
+        control={
+          <TextInput
+            ariaLabel="Codex API 密钥"
+            value={draft.apiKey}
+            onChange={(value) => updateDraft({ apiKey: value })}
+            placeholder={draft.hasStoredCredential ? "保留当前密钥" : "sk-..."}
+            type="password"
+          />
+        }
+      />
+
+      <SettingRow
+        icon={BrainCircuit}
+        label="默认模型"
+        description="保存后，Codex 会优先使用这里选择的模型。"
+        control={
+          <SelectField
+            ariaLabel="Codex 默认模型"
+            value={draft.defaultModel}
+            onChange={handleModelChange}
+            options={snapshot.codexModels.map((model) => ({
+              value: model.id,
+              label: `${model.label} · ${getModelDescription(model.id)}`,
+            }))}
+          />
+        }
+      />
+
+      <SettingRow
+        icon={SlidersHorizontal}
+        label="输出详细程度"
+        description="控制 Codex 输出内容的简洁或详细程度。"
+        control={
+          <SelectField
+            ariaLabel="Codex 输出详细程度"
+            value={draft.defaultVerbosity}
+            onChange={(value) =>
+              updateDraft({ defaultVerbosity: value as ProviderVerbosity })
             }
-          >
-            <TextInput
-              ariaLabel="Codex API Key"
-              value={draft.apiKey}
-              onChange={(value) => updateDraft({ apiKey: value })}
-              placeholder={draft.hasStoredCredential ? "保留现有凭证" : "sk-..."}
-              type="password"
-            />
-          </FieldBlock>
+            options={supportedVerbosityLevels.map((value) => ({
+              value,
+              label: verbosityLabels[value],
+            }))}
+          />
+        }
+      />
 
-          <FieldBlock
-            icon={BrainCircuit}
-            label="默认模型"
-            description="保存后会立即写入 settings.json 并作为当前 Codex 模型激活。"
-          >
-            <SelectField
-              ariaLabel="Codex 默认模型"
-              value={draft.defaultModel}
-              onChange={handleModelChange}
-              options={snapshot.codexModels.map((model) => ({
-                value: model.id,
-                label: `${model.label} · ${model.description}`,
-              }))}
-            />
-          </FieldBlock>
+      <SettingRow
+        icon={BrainCircuit}
+        label="推理强度"
+        description="控制 Codex 在回答前投入多少推理深度。"
+        control={
+          <SelectField
+            ariaLabel="Codex 推理强度"
+            value={draft.defaultReasoningEffort}
+            onChange={(value) =>
+              updateDraft({
+                defaultReasoningEffort: value as ProviderReasoningEffort,
+              })
+            }
+            options={supportedEffortLevels.map((value) => ({
+              value,
+              label: reasoningLabels[value],
+            }))}
+          />
+        }
+      />
 
-          <FieldBlock
-            icon={SlidersHorizontal}
-            label="Verbosity"
-            description="仅展示当前模型支持的 verbosity 级别。"
-          >
-            <SelectField
-              ariaLabel="Codex Verbosity"
-              value={draft.defaultVerbosity}
-              onChange={(value) =>
-                updateDraft({ defaultVerbosity: value as ProviderVerbosity })
-              }
-              options={supportedVerbosityLevels.map((value) => ({
-                value,
-                label: value,
-              }))}
-            />
-          </FieldBlock>
+      <SettingRow
+        icon={ScanText}
+        label="上下文窗口"
+        description={`控制单次对话可用的上下文上限。留空时使用模型默认值，当前为 ${resolvedContextWindow.toLocaleString()}。`}
+        control={
+          <NumberTextInput
+            ariaLabel="Codex 上下文窗口"
+            value={draft.modelContextWindow}
+            onChange={(value) => updateDraft({ modelContextWindow: value })}
+            placeholder={resolvedContextWindow.toString()}
+          />
+        }
+      />
 
-          <FieldBlock
-            icon={SlidersHorizontal}
-            label="Reasoning Effort"
-            description="会按当前模型支持范围自动收敛到合法值。"
-          >
-            <SelectField
-              ariaLabel="Codex Reasoning Effort"
-              value={draft.defaultReasoningEffort}
-              onChange={(value) =>
-                updateDraft({
-                  defaultReasoningEffort: value as ProviderReasoningEffort,
-                })
-              }
-              options={supportedEffortLevels.map((value) => ({
-                value,
-                label: value,
-              }))}
-            />
-          </FieldBlock>
+      <SettingRow
+        icon={ScanText}
+        label="自动压缩阈值"
+        description={`到达该 token 数后自动压缩上下文。留空时按上下文窗口的 90% 计算，当前为 ${resolvedAutoCompact.toLocaleString()}。`}
+        control={
+          <NumberTextInput
+            ariaLabel="Codex 自动压缩阈值"
+            value={draft.modelAutoCompactTokenLimit}
+            onChange={(value) =>
+              updateDraft({ modelAutoCompactTokenLimit: value })
+            }
+            placeholder={resolvedAutoCompact.toString()}
+          />
+        }
+      />
+    </div>
+  );
+}
 
-          <FieldBlock
-            icon={BrainCircuit}
-            label="Context Window"
-            description={`留空时使用模型默认值，当前解析结果为 ${resolvedContextWindow.toLocaleString()}。`}
-          >
-            <TextInput
-              ariaLabel="Codex Context Window"
-              value={draft.modelContextWindow}
-              onChange={(value) => updateDraft({ modelContextWindow: value })}
-              placeholder={resolvedContextWindow.toString()}
-              inputMode="numeric"
-            />
-          </FieldBlock>
-
-          <FieldBlock
-            icon={BrainCircuit}
-            label="Auto-Compact Trigger"
-            description={`留空时采用兼容默认值，运行时会夹紧到 context window 的 90%，当前解析结果为 ${resolvedAutoCompact.toLocaleString()}。`}
-          >
-            <TextInput
-              ariaLabel="Codex Auto Compact Trigger"
-              value={draft.modelAutoCompactTokenLimit}
-              onChange={(value) =>
-                updateDraft({ modelAutoCompactTokenLimit: value })
-              }
-              placeholder={resolvedAutoCompact.toString()}
-              inputMode="numeric"
-            />
-          </FieldBlock>
+function ProviderOverviewRow({
+  logoUrl,
+  title,
+  description,
+  active,
+  action,
+}: {
+  logoUrl: string;
+  title: string;
+  description: string;
+  active: boolean;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-4 border-b border-[var(--color-border)] px-5 py-5 sm:grid-cols-[minmax(0,1fr)_320px] sm:items-center">
+      <div className="flex min-w-0 items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-surface)]">
+          <img
+            src={logoUrl}
+            alt=""
+            className="h-5 w-5 object-contain"
+            aria-hidden="true"
+          />
         </div>
-
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-[length:var(--ui-font-size-sm)] text-[var(--color-muted)]">
-          <div>providers.json: {snapshot.paths.providersPath}</div>
-          <div>auth.json: {snapshot.paths.authPath}</div>
-          <div>settings.json: {snapshot.paths.settingsPath}</div>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-[length:var(--ui-font-size-md)] font-medium text-[var(--color-fg)]">
+              {title}
+            </div>
+            {active ? <ActiveBadge /> : null}
+          </div>
+          <div className="mt-1 text-[length:var(--ui-font-size-sm)] text-[var(--color-muted)]">
+            {description}
+          </div>
         </div>
       </div>
+
+      {action ? <div className="w-full shrink-0">{action}</div> : null}
+    </div>
+  );
+}
+
+function ConfigFilesMenu({ files }: { files: ProviderFileEntry[] }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [open]);
+
+  const handleSelect = async (entry: ProviderFileEntry) => {
+    setOpen(false);
+
+    if (!supportsFinderBridge()) {
+      toast.error("当前桌面桥接未提供文件定位能力。");
+      return;
+    }
+
+    try {
+      await window.desktopApp.showItemInFolder(entry.path);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "打开配置位置失败。");
+    }
+  };
+
+  return (
+    <div ref={rootRef} className="relative w-full">
+      <button
+        type="button"
+        className="inline-flex h-11 w-full items-center justify-between gap-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[length:var(--ui-font-size-sm)] font-medium text-[var(--color-fg)] transition-colors duration-150 hover:bg-[var(--color-surface-strong)]"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="打开配置"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span>打开配置</span>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 transition-transform duration-150",
+            open ? "rotate-180" : "rotate-0",
+          )}
+          aria-hidden="true"
+        />
+      </button>
+
+      {open ? (
+        <div
+          role="menu"
+          className="absolute top-[calc(100%+8px)] right-0 z-30 w-full overflow-hidden rounded-[16px] border border-[var(--color-border)] bg-[var(--color-panel)] p-1 shadow-[var(--shadow-panel)]"
+        >
+          {files.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                void handleSelect(entry);
+              }}
+              className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2 text-left text-[length:var(--ui-font-size-sm)] text-[var(--color-fg)] transition-colors duration-150 hover:bg-[var(--color-surface)]"
+            >
+              <span>{entry.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -533,7 +700,7 @@ function CodexProviderView({
 function ActiveBadge() {
   return (
     <span className="inline-flex items-center rounded-full bg-[var(--color-accent)]/10 px-2.5 py-1 text-[length:var(--ui-font-size-2xs)] font-semibold text-[var(--color-accent)]">
-      当前激活
+      当前使用中
     </span>
   );
 }
@@ -559,49 +726,42 @@ function InlineNotice({
   );
 }
 
-function InfoTile({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Bot;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
-      <div className="flex items-center gap-2 text-[length:var(--ui-font-size-2xs)] font-semibold tracking-[0.08em] text-[var(--color-muted)] uppercase">
-        <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-        <span>{label}</span>
-      </div>
-      <div className="mt-2 break-all text-[length:var(--ui-font-size-md)] font-medium text-[var(--color-fg)]">
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function FieldBlock({
+function SettingRow({
   icon: Icon,
   label,
   description,
-  children,
+  control,
 }: {
   icon: typeof Bot;
   label: string;
   description: string;
-  children: ReactNode;
+  control: ReactNode;
 }) {
   return (
-    <div className="rounded-[18px] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4">
-      <div className="flex items-center gap-2 text-[length:var(--ui-font-size-xs)] font-semibold tracking-[0.08em] text-[var(--color-muted)] uppercase">
-        <Icon className="h-4 w-4" aria-hidden="true" />
-        <span>{label}</span>
+    <div className="grid grid-cols-1 gap-4 border-b border-[var(--color-border)] px-5 py-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_320px] sm:items-center">
+      <div className="flex min-w-0 items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-surface)] text-[var(--color-muted)]">
+          <Icon className="h-4 w-4" aria-hidden="true" />
+        </div>
+        <div className="min-w-0">
+          <div className="text-[length:var(--ui-font-size-md)] font-medium text-[var(--color-fg)]">
+            {label}
+          </div>
+          <div className="mt-1 text-[length:var(--ui-font-size-sm)] text-[var(--color-muted)]">
+            {description}
+          </div>
+        </div>
       </div>
-      <div className="mt-2 text-[length:var(--ui-font-size-sm)] text-[var(--color-muted)]">
-        {description}
-      </div>
-      <div className="mt-3">{children}</div>
+
+      <div className="w-full shrink-0">{control}</div>
+    </div>
+  );
+}
+
+function StaticValue({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex min-h-11 w-full items-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[length:var(--ui-font-size-sm)] text-[var(--color-fg)]">
+      {children}
     </div>
   );
 }
@@ -629,7 +789,29 @@ function TextInput({
       inputMode={inputMode}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] px-3 text-[length:var(--ui-font-size-md)] text-[var(--color-fg)] outline-none transition-colors duration-150 placeholder:text-[var(--color-muted)] focus:border-[var(--color-accent)]"
+      className="h-11 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[length:var(--ui-font-size-md)] text-[var(--color-fg)] outline-none transition-colors duration-150 placeholder:text-[var(--color-muted)] focus:border-[var(--color-accent)]"
+    />
+  );
+}
+
+function NumberTextInput({
+  ariaLabel,
+  value,
+  onChange,
+  placeholder,
+}: {
+  ariaLabel: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <TextInput
+      ariaLabel={ariaLabel}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      inputMode="numeric"
     />
   );
 }
@@ -650,7 +832,7 @@ function SelectField({
       aria-label={ariaLabel}
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] px-3 text-[length:var(--ui-font-size-md)] text-[var(--color-fg)] outline-none transition-colors duration-150 focus:border-[var(--color-accent)]"
+      className="h-11 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[length:var(--ui-font-size-md)] text-[var(--color-fg)] outline-none transition-colors duration-150 focus:border-[var(--color-accent)]"
     >
       {options.map((option) => (
         <option key={option.value} value={option.value}>

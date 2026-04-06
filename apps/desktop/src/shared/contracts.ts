@@ -104,6 +104,7 @@ export interface DesktopBridge {
   selectSession: (worktreeId: string, sessionId: string) => Promise<SidebarStateSnapshot>;
   removeSession: (worktreeId: string, sessionId: string) => Promise<SidebarStateSnapshot>;
   revealInFinder: (path: string) => Promise<void>;
+  showItemInFolder: (path: string) => Promise<void>;
   createTerminalSession: (input: TerminalCreateInput) => Promise<TerminalSessionInfo>;
   writeTerminal: (sessionId: string, data: string) => Promise<void>;
   closeTerminal: (sessionId: string) => Promise<void>;

@@ -190,6 +190,7 @@ const desktopBridgeMock: DesktopBridge = {
   selectSession: vi.fn().mockResolvedValue(defaultSidebarState),
   removeSession: vi.fn().mockResolvedValue(defaultSidebarState),
   revealInFinder: vi.fn().mockResolvedValue(undefined),
+  showItemInFolder: vi.fn().mockResolvedValue(undefined),
   createTerminalSession: vi.fn().mockResolvedValue({
     sessionId: "global-shell",
     cwd: "/tmp",
@@ -281,5 +282,6 @@ if (typeof window !== "undefined") {
     vi.mocked(window.desktopApp.createSession).mockResolvedValue(defaultSidebarState);
     vi.mocked(window.desktopApp.selectSession).mockResolvedValue(defaultSidebarState);
     vi.mocked(window.desktopApp.removeSession).mockResolvedValue(defaultSidebarState);
+    vi.mocked(window.desktopApp.showItemInFolder).mockResolvedValue(undefined);
   });
 }

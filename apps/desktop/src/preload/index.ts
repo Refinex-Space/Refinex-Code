@@ -48,6 +48,7 @@ const desktopBridge: DesktopBridge = {
       sessionId,
     }) as Promise<SidebarStateSnapshot>,
   revealInFinder: (workspacePath) => ipcRenderer.invoke("workspace:reveal", workspacePath),
+  showItemInFolder: (targetPath) => ipcRenderer.invoke("finder:show-item", targetPath),
   createTerminalSession: (input) =>
     ipcRenderer.invoke("terminal:create", input) as Promise<TerminalSessionInfo>,
   writeTerminal: (sessionId, data) =>

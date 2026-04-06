@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type {
   AppInfo,
@@ -295,6 +295,22 @@ function registerIpcHandlers() {
 
   ipcMain.handle("workspace:reveal", async (_event, workspacePath: string) => {
     const error = await shell.openPath(workspacePath);
+    if (error) {
+      throw new Error(error);
+    }
+  });
+  ipcMain.handle("finder:show-item", async (_event, targetPath: string) => {
+    if (!targetPath.trim()) {
+      throw new Error("Target path is required.");
+    }
+
+    if (existsSync(targetPath)) {
+      shell.showItemInFolder(targetPath);
+      return;
+    }
+
+    const parentDirectory = dirname(targetPath);
+    const error = await shell.openPath(parentDirectory);
     if (error) {
       throw new Error(error);
     }
