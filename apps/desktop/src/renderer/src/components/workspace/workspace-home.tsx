@@ -50,18 +50,12 @@ export function WorkspaceHome({
                   showCloseButton={false}
                 />
               ) : (
-                <div className="flex min-h-[320px] w-full flex-1 flex-col items-center justify-center rounded-[28px] border border-[var(--color-border)] bg-[var(--color-panel)] px-8 text-center shadow-[var(--shadow-panel)]">
-                  <div className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--color-muted)]">
-                    GUI
-                  </div>
-                  <h2 className="mt-4 text-[28px] font-semibold tracking-[-0.04em] text-[var(--color-fg)]">
-                    敬请期待
-                  </h2>
-                  <p className="mt-3 max-w-[34rem] text-sm leading-6 text-[var(--color-muted)]">
-                    图形化对话界面会在后续阶段接入。当前线程已经可以切换到
-                    TUI 专注模式，直接复用 CLI 的真实终端交互与输出格式。
-                  </p>
-                </div>
+                <WorkspaceEmptyState
+                  activeWorktree={activeWorktree}
+                  worktrees={worktrees}
+                  onOpenWorkspace={onOpenWorkspace}
+                  onSelectWorktree={onSelectWorktree}
+                />
               )}
             </div>
           </>

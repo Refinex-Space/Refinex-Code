@@ -106,6 +106,71 @@ describe("desktop shell", () => {
     ).toBeInTheDocument();
   });
 
+  it("uses a visible light-theme hover token in the GUI project picker", async () => {
+    vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue({
+      ...emptySidebarState,
+      storageRoot:
+        "/Users/test/Library/Application Support/RWork/sidebar-state",
+      activeWorktreeId: "alpha",
+      activeSessionId: null,
+      worktrees: [
+        {
+          id: "alpha",
+          label: "alpha",
+          sourcePath: "/Users/test/projects/alpha",
+          worktreePath: "/Users/test/projects/alpha",
+          gitRoot: "/Users/test/projects/alpha",
+          branch: "main",
+          isGitRepository: true,
+          storagePath:
+            "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha",
+          createdAt: "2026-04-07T00:00:00.000Z",
+          updatedAt: "2026-04-07T00:00:00.000Z",
+          lastOpenedAt: "2026-04-07T00:00:00.000Z",
+          lastSessionId: null,
+          sessions: [],
+        },
+        {
+          id: "beta",
+          label: "beta",
+          sourcePath: "/Users/test/projects/beta",
+          worktreePath: "/Users/test/projects/beta",
+          gitRoot: "/Users/test/projects/beta",
+          branch: "main",
+          isGitRepository: true,
+          storagePath:
+            "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/beta",
+          createdAt: "2026-04-07T00:00:00.000Z",
+          updatedAt: "2026-04-07T00:00:00.000Z",
+          lastOpenedAt: "2026-04-07T00:00:00.000Z",
+          lastSessionId: null,
+          sessions: [],
+        },
+      ],
+    });
+
+    render(<App />);
+
+    expect(await screen.findByLabelText("当前项目：alpha")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("当前项目：alpha"));
+
+    const menu = await screen.findByRole("menu");
+    const inactiveProjectButton = within(menu).getByRole("button", {
+      name: "beta",
+    });
+    const addProjectButton = within(menu).getByRole("button", {
+      name: "添加新项目",
+    });
+
+    expect(inactiveProjectButton).toHaveClass(
+      "hover:bg-[var(--color-sidebar-hover)]",
+    );
+    expect(addProjectButton).toHaveClass(
+      "hover:bg-[var(--color-sidebar-hover)]",
+    );
+  });
+
   it("renders persisted worktrees and threads in the sidebar", async () => {
     const sidebarSnapshot: SidebarStateSnapshot = {
       ...emptySidebarState,
@@ -321,7 +386,8 @@ describe("desktop shell", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "切换到 GUI 模式" }));
 
-    expect(await screen.findByText("敬请期待")).toBeInTheDocument();
+    expect(await screen.findByText("开始构建")).toBeInTheDocument();
+    expect(screen.getByLabelText("当前项目：alpha")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "切换到 GUI 模式" })).toHaveAttribute(
       "aria-selected",
       "true",

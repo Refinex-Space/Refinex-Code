@@ -164,7 +164,7 @@ export function WorkspaceEmptyState({
                             "group flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-left transition-colors duration-150",
                             worktree.isActive
                               ? "bg-[var(--color-surface-strong)]"
-                              : "hover:bg-[var(--color-surface)]",
+                              : "hover:bg-[var(--color-sidebar-hover)]",
                           )}
                         >
                           <Folder
@@ -202,7 +202,7 @@ export function WorkspaceEmptyState({
               <button
                 type="button"
                 onClick={handleAddProject}
-                className="group flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-left transition-colors duration-150 hover:bg-[var(--color-surface)]"
+                className="group flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-left transition-colors duration-150 hover:bg-[var(--color-sidebar-hover)]"
               >
                 <FolderPlus
                   className="h-[15px] w-[15px] shrink-0 text-[var(--color-muted)] transition-colors duration-150 group-hover:text-[var(--color-fg)]"
