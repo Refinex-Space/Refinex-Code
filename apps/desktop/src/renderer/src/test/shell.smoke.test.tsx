@@ -16,6 +16,7 @@ describe("desktop shell", () => {
     const header = screen.getByRole("banner");
     const main = screen.getByRole("main");
     expect(within(header).queryByRole("button", { name: "Open Project" })).not.toBeInTheDocument();
+    expect(within(header).queryByRole("tablist", { name: "线程交互模式" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "RWork logo" })).toBeInTheDocument();
@@ -103,13 +104,25 @@ describe("desktop shell", () => {
     });
 
     render(<App />);
-    const main = screen.getByRole("main");
 
+    const header = screen.getByRole("banner");
     expect((await screen.findAllByText("Thread 02")).length).toBeGreaterThan(0);
-    const projectTrigger = within(main).getByText("alpha");
-    expect(projectTrigger).toBeInTheDocument();
     expect(screen.getByText("Thread 01")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "搜索会话" })).toBeInTheDocument();
+    expect(within(header).getByRole("tablist", { name: "线程交互模式" })).toBeInTheDocument();
+    expect(within(header).getByRole("tab", { name: "切换到 TUI 模式" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(
+      document.querySelector('[data-thread-surface="content"]'),
+    ).toHaveClass("max-w-[920px]");
+    expect(
+      document.querySelector('[data-thread-composer="surface"]'),
+    ).toHaveClass("mx-auto", "max-w-[920px]");
+    expect(
+      screen.getByRole("button", { name: "发送消息不可用" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByPlaceholderText("描述下一步要做的事，Enter 发送，Shift+Enter 换行"),
     ).toBeInTheDocument();
@@ -163,12 +176,251 @@ describe("desktop shell", () => {
       });
       expect(screen.getAllByText("新线程").length).toBeGreaterThan(0);
     });
+  });
 
-    fireEvent.click(projectTrigger);
+  it("switches between GUI and TUI modes and routes composer input into the thread terminal", async () => {
+    vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue({
+      ...emptySidebarState,
+      storageRoot:
+        "/Users/test/Library/Application Support/RWork/sidebar-state",
+      activeWorktreeId: "alpha",
+      activeSessionId: "thread-2",
+      worktrees: [
+        {
+          id: "alpha",
+          label: "alpha",
+          sourcePath: "/Users/test/projects/alpha",
+          worktreePath: "/Users/test/projects/alpha",
+          gitRoot: "/Users/test/projects/alpha",
+          branch: "main",
+          isGitRepository: true,
+          storagePath:
+            "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha",
+          createdAt: "2026-04-06T00:00:00.000Z",
+          updatedAt: "2026-04-06T00:00:00.000Z",
+          lastOpenedAt: "2026-04-06T00:00:00.000Z",
+          lastSessionId: "thread-2",
+          sessions: [
+            {
+              id: "thread-2",
+              worktreeId: "alpha",
+              title: "新线程",
+              status: "idle",
+              createdAt: "2026-04-06T00:00:00.000Z",
+              updatedAt: "2026-04-06T00:00:00.000Z",
+              lastOpenedAt: "2026-04-06T00:00:00.000Z",
+              storagePath:
+                "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha/sessions/thread-2.json",
+            },
+          ],
+        },
+      ],
+    });
+
+    render(<App />);
+
+    const composer = await screen.findByLabelText("新线程");
+    fireEvent.change(composer, {
+      target: {
+        value: "帮我检查 README",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送到当前线程 TUI" }));
+
+    await waitFor(() => {
+      expect(window.desktopApp.createTerminalSession).toHaveBeenCalledWith({
+        sessionId: "thread-tui:thread-2",
+        cwd: "/Users/test/projects/alpha",
+        profile: "thread-tui",
+      });
+      expect(window.desktopApp.writeTerminal).toHaveBeenCalledWith(
+        "thread-tui:thread-2",
+        "帮我检查 README\r",
+      );
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "切换到 GUI 模式" }));
+
+    expect(await screen.findByText("敬请期待")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "切换到 GUI 模式" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("shows slash skill suggestions and applies a selected skill as a pill", async () => {
+    vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue({
+      ...emptySidebarState,
+      storageRoot:
+        "/Users/test/Library/Application Support/RWork/sidebar-state",
+      activeWorktreeId: "alpha",
+      activeSessionId: "thread-2",
+      worktrees: [
+        {
+          id: "alpha",
+          label: "alpha",
+          sourcePath: "/Users/test/projects/alpha",
+          worktreePath: "/Users/test/projects/alpha",
+          gitRoot: "/Users/test/projects/alpha",
+          branch: "main",
+          isGitRepository: true,
+          storagePath:
+            "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha",
+          createdAt: "2026-04-06T00:00:00.000Z",
+          updatedAt: "2026-04-06T00:00:00.000Z",
+          lastOpenedAt: "2026-04-06T00:00:00.000Z",
+          lastSessionId: "thread-2",
+          sessions: [
+            {
+              id: "thread-2",
+              worktreeId: "alpha",
+              title: "新线程",
+              status: "idle",
+              createdAt: "2026-04-06T00:00:00.000Z",
+              updatedAt: "2026-04-06T00:00:00.000Z",
+              lastOpenedAt: "2026-04-06T00:00:00.000Z",
+              storagePath:
+                "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha/sessions/thread-2.json",
+            },
+          ],
+        },
+      ],
+    });
+    vi.mocked(window.desktopApp.getSkillsSnapshot).mockResolvedValue({
+      activeWorktreePath: "/Users/test/projects/alpha",
+      generatedAt: "2026-04-07T00:00:00.000Z",
+      skills: [
+        {
+          id: "personal:harness-feat",
+          name: "harness-feat",
+          displayName: "harness-feat",
+          sourceKind: "personal",
+          sourceLabel: "Personal skills",
+          skillRoot: "/Users/test/.agents/skills/harness-feat",
+          skillMdPath: "/Users/test/.agents/skills/harness-feat/SKILL.md",
+          description: "Plan and execute features with harness discipline.",
+          userInvocable: true,
+          disableModelInvocation: false,
+          invokedBy: "User or RWork",
+          addedBy: "User",
+          lastUpdated: "2026-04-07T00:00:00.000Z",
+          tree: [],
+        },
+        {
+          id: "personal:tech-writing",
+          name: "tech-writing",
+          displayName: "tech-writing",
+          sourceKind: "personal",
+          sourceLabel: "Personal skills",
+          skillRoot: "/Users/test/.agents/skills/tech-writing",
+          skillMdPath: "/Users/test/.agents/skills/tech-writing/SKILL.md",
+          description: "Write long-form technical content for engineering work.",
+          userInvocable: true,
+          disableModelInvocation: false,
+          invokedBy: "User or RWork",
+          addedBy: "User",
+          lastUpdated: "2026-04-07T00:00:00.000Z",
+          tree: [],
+        },
+        {
+          id: "personal:hidden-skill",
+          name: "hidden-skill",
+          displayName: "hidden-skill",
+          sourceKind: "personal",
+          sourceLabel: "Personal skills",
+          skillRoot: "/Users/test/.agents/skills/hidden-skill",
+          skillMdPath: "/Users/test/.agents/skills/hidden-skill/SKILL.md",
+          description: "This skill should stay unavailable to slash input.",
+          userInvocable: false,
+          disableModelInvocation: false,
+          invokedBy: "RWork",
+          addedBy: "User",
+          lastUpdated: "2026-04-07T00:00:00.000Z",
+          tree: [],
+        },
+      ],
+    });
+
+    render(<App />);
+
+    const composer = await screen.findByLabelText("新线程");
+    fireEvent.change(composer, {
+      target: {
+        value: "/",
+      },
+    });
+
+    const suggestionList = await screen.findByRole("listbox", {
+      name: "Skill suggestions",
+    });
+    expect(within(suggestionList).getByText("技能")).toBeInTheDocument();
+    expect(within(suggestionList).getByRole("option", { name: /Harness Feat/i })).toBeInTheDocument();
+    expect(within(suggestionList).getByRole("option", { name: /Tech Writing/i })).toBeInTheDocument();
     expect(
-      await screen.findByPlaceholderText("Search projects"),
+      within(suggestionList).queryByRole("option", { name: /Hidden Skill/i }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.keyDown(composer, {
+      key: "ArrowDown",
+    });
+
+    await waitFor(() => {
+      expect(
+        within(suggestionList).getByRole("option", { name: /Tech Writing/i }),
+      ).toHaveAttribute("aria-selected", "true");
+    });
+
+    fireEvent.keyDown(composer, {
+      key: "Enter",
+    });
+
+    await waitFor(() => {
+      expect(composer).toHaveValue("");
+    });
+    const firstPill = screen.getByLabelText("已选择技能 Tech Writing");
+    expect(firstPill).toBeInTheDocument();
+    expect(firstPill).toHaveClass("text-[length:var(--ui-font-size-lg)]");
+    expect(firstPill).toHaveClass("px-2.5", "py-0", "leading-6", "gap-1", "h-6", "self-start");
+    expect(firstPill.parentElement).toHaveClass("items-start");
+    expect(composer).toHaveClass("py-0");
+    expect(
+      screen.queryByRole("listbox", { name: "Skill suggestions" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(composer, {
+      target: {
+        value: "/",
+      },
+    });
+
+    const secondSuggestionList = await screen.findByRole("listbox", {
+      name: "Skill suggestions",
+    });
+    expect(
+      within(secondSuggestionList).getByRole("option", { name: /Harness Feat/i }),
     ).toBeInTheDocument();
-    expect(await screen.findByText("添加新项目")).toBeInTheDocument();
+
+    fireEvent.keyDown(composer, {
+      key: "Enter",
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("已选择技能 Harness Feat")).toBeInTheDocument();
+    });
+
+    fireEvent.change(composer, {
+      target: {
+        value: "帮我写一段发布说明",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送到当前线程 TUI" }));
+
+    await waitFor(() => {
+      expect(window.desktopApp.writeTerminal).toHaveBeenCalledWith(
+        "thread-tui:thread-2",
+        "/tech-writing /harness-feat 帮我写一段发布说明\r",
+      );
+    });
   });
 
   it("keeps the sidebar toggle interactive after collapsing", async () => {

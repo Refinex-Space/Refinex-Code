@@ -5,6 +5,7 @@ import {
 import type { Key } from '../../ink.js'
 import { getGlobalConfig } from '../../utils/config.js'
 import { env } from '../../utils/env.js'
+import { isEnvTruthy } from '../../utils/envUtils.js'
 /**
  * Helper function to check if vim mode is currently enabled
  * @returns boolean indicating if vim mode is active
@@ -12,6 +13,10 @@ import { env } from '../../utils/env.js'
 export function isVimModeEnabled(): boolean {
   const config = getGlobalConfig()
   return config.editorMode === 'vim'
+}
+
+export function shouldHidePromptChrome(): boolean {
+  return isEnvTruthy(process.env.CLAUDE_CODE_HIDE_PROMPT_UI)
 }
 
 export function getNewlineInstructions(): string {

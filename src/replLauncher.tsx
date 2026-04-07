@@ -1,4 +1,5 @@
 import React from 'react';
+import { appendFileSync } from 'fs';
 import type { StatsStore } from './context/stats.js';
 import type { Root } from './ink.js';
 import type { Props as REPLProps } from './screens/REPL.js';
@@ -9,13 +10,37 @@ type AppWrapperProps = {
   stats?: StatsStore;
   initialState: AppState;
 };
+
+const desktopTerminalDebugTarget = process.env.REFINEX_DESKTOP_TERMINAL_DEBUG;
+
+function writeDesktopTerminalDebug(message: string): void {
+  if (!desktopTerminalDebugTarget) {
+    return;
+  }
+
+  const outputPath =
+    desktopTerminalDebugTarget === '1'
+      ? '/tmp/refinex-desktop-terminal-debug.log'
+      : desktopTerminalDebugTarget;
+
+  try {
+    appendFileSync(
+      outputPath,
+      `[repl-launcher ${new Date().toISOString()} pid=${process.pid}] ${message}\n`,
+    );
+  } catch {
+    // 调试日志失败时不能影响 REPL 启动。
+  }
+}
 export async function launchRepl(root: Root, appProps: AppWrapperProps, replProps: REPLProps, renderAndRun: (root: Root, element: React.ReactNode) => Promise<void>): Promise<void> {
+  writeDesktopTerminalDebug('launchRepl start');
   const {
     App
   } = await import('./components/App.js');
   const {
     REPL
   } = await import('./screens/REPL.js');
+  writeDesktopTerminalDebug('launchRepl imported App and REPL');
   await renderAndRun(root, <App {...appProps}>
       <REPL {...replProps} />
     </App>);

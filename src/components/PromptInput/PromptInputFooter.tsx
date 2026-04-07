@@ -23,6 +23,7 @@ import { Notifications } from './Notifications.js';
 import { PromptInputFooterLeftSide } from './PromptInputFooterLeftSide.js';
 import { PromptInputFooterSuggestions, type SuggestionItem } from './PromptInputFooterSuggestions.js';
 import { PromptInputHelpMenu } from './PromptInputHelpMenu.js';
+import { shouldHidePromptChrome } from './utils.js';
 type Props = {
   apiKeyStatus: VerificationStatus;
   debug: boolean;
@@ -127,6 +128,9 @@ function PromptInputFooter({
     maxColumnWidth
   } : null, [isFullscreen, suggestions, selectedSuggestion, maxColumnWidth]);
   useSetPromptOverlay(overlayData);
+  if (shouldHidePromptChrome()) {
+    return null;
+  }
   if (suggestions.length && !isFullscreen) {
     return <Box paddingX={2} paddingY={0}>
         <PromptInputFooterSuggestions suggestions={suggestions} selectedSuggestion={selectedSuggestion} maxColumnWidth={maxColumnWidth} />

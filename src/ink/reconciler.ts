@@ -31,12 +31,12 @@ import applyStyles, { type Styles, type TextStyles } from './styles.js'
 // accidentally breaking other third-party code.
 // See https://github.com/vadimdemedes/ink/issues/384
 if (process.env.NODE_ENV === 'development') {
-  try {
-    // eslint-disable-next-line custom-rules/no-top-level-dynamic-import -- dev-only; NODE_ENV check is DCE'd in production
-    void import('./devtools.js')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
-    if (error.code === 'ERR_MODULE_NOT_FOUND') {
+  // 动态 import 的失败会通过 Promise 拒绝抛出，不能被同步 try/catch 捕获。
+  // 这里显式处理 rejected Promise，避免开发态缺少 devtools 文件时直接打崩 CLI。
+  // eslint-disable-next-line custom-rules/no-top-level-dynamic-import -- dev-only; NODE_ENV check is DCE'd in production
+  void import('./devtools.js').catch((error: unknown) => {
+    const importError = error as NodeJS.ErrnoException
+    if (importError?.code === 'ERR_MODULE_NOT_FOUND') {
       // biome-ignore lint/suspicious/noConsole: intentional warning
       console.warn(
         `
@@ -48,11 +48,11 @@ To install use this command:
 $ npm install --save-dev react-devtools-core
 				`.trim() + '\n',
       )
-    } else {
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
-      throw error
+      return
     }
-  }
+
+    throw error
+  })
 }
 
 // --

@@ -21,7 +21,7 @@ startKeychainPrefetch();
 import { feature } from 'bun:bundle';
 import { Command as CommanderCommand, InvalidArgumentError, Option } from '@commander-js/extra-typings';
 import chalk from 'chalk';
-import { readFileSync } from 'fs';
+import { appendFileSync, readFileSync } from 'fs';
 import mapValues from 'lodash-es/mapValues.js';
 import pickBy from 'lodash-es/pickBy.js';
 import uniqBy from 'lodash-es/uniqBy.js';
@@ -64,6 +64,28 @@ import { jsonParse, writeFileSync_DEPRECATED } from './utils/slowOperations.js';
 import { computeInitialTeamContext } from './utils/swarm/reconnection.js';
 import { initializeWarningHandler } from './utils/warningHandler.js';
 import { isWorktreeModeEnabled } from './utils/worktreeModeEnabled.js';
+
+const desktopTerminalDebugTarget = process.env.REFINEX_DESKTOP_TERMINAL_DEBUG;
+
+function writeDesktopTerminalDebug(message: string): void {
+  if (!desktopTerminalDebugTarget) {
+    return;
+  }
+
+  const outputPath =
+    desktopTerminalDebugTarget === '1'
+      ? '/tmp/refinex-desktop-terminal-debug.log'
+      : desktopTerminalDebugTarget;
+
+  try {
+    appendFileSync(
+      outputPath,
+      `[cli-main ${new Date().toISOString()} pid=${process.pid}] ${message}\n`,
+    );
+  } catch {
+    // 调试日志失败时不能影响主流程。
+  }
+}
 
 // Lazy require to avoid circular dependency: teammate.ts -> AppState.tsx -> ... -> main.tsx
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -583,6 +605,13 @@ const _pendingSSH: PendingSSH | undefined = feature('SSH_REMOTE') ? {
   extraCliArgs: []
 } : undefined;
 export async function main() {
+  writeDesktopTerminalDebug(
+    `main start argv=${JSON.stringify(process.argv.slice(2))} tty=${JSON.stringify({
+      stdin: process.stdin.isTTY,
+      stdout: process.stdout.isTTY,
+      stderr: process.stderr.isTTY,
+    })}`,
+  );
   profileCheckpoint('main_function_start');
 
   // Preserve the restored debug alias without registering an invalid
@@ -598,6 +627,7 @@ export async function main() {
 
   // Initialize warning handler early to catch warnings
   initializeWarningHandler();
+  writeDesktopTerminalDebug('warning handler initialized');
   process.on('exit', () => {
     resetCursor();
   });
@@ -611,6 +641,7 @@ export async function main() {
     process.exit(0);
   });
   profileCheckpoint('main_warning_handler_initialized');
+  writeDesktopTerminalDebug('after warning handler checkpoint');
 
   // Check for cc:// or cc+unix:// URL in argv — rewrite so the main command
   // handles it, giving the full interactive TUI instead of a stripped-down subcommand.
@@ -646,6 +677,7 @@ export async function main() {
       }
     }
   }
+  writeDesktopTerminalDebug('after direct-connect preprocessing');
 
   // Handle deep link URIs early — this is invoked by the OS protocol handler
   // and should bail out before full init since it only needs to parse the URI
@@ -807,6 +839,9 @@ export async function main() {
   const hasInitOnlyFlag = cliArgs.includes('--init-only');
   const hasSdkUrl = cliArgs.some(arg => arg.startsWith('--sdk-url'));
   const isNonInteractive = hasPrintFlag || hasInitOnlyFlag || hasSdkUrl || !process.stdout.isTTY;
+  writeDesktopTerminalDebug(
+    `interactive mode resolved isNonInteractive=${isNonInteractive} hasPrint=${hasPrintFlag} hasInitOnly=${hasInitOnlyFlag} hasSdkUrl=${hasSdkUrl}`,
+  );
 
   // Stop capturing early input for non-interactive modes
   if (isNonInteractive) {
@@ -819,6 +854,9 @@ export async function main() {
 
   // Initialize entrypoint based on mode - needs to be set before any event is logged
   initializeEntrypoint(isNonInteractive);
+  writeDesktopTerminalDebug(
+    `entrypoint initialized as ${process.env.CLAUDE_CODE_ENTRYPOINT ?? 'unset'}`,
+  );
 
   // Determine client type
   const clientType = (() => {
@@ -838,6 +876,7 @@ export async function main() {
     return 'cli';
   })();
   setClientType(clientType);
+  writeDesktopTerminalDebug(`clientType=${clientType}`);
   const previewFormat = process.env.CLAUDE_CODE_QUESTION_PREVIEW_FORMAT;
   if (previewFormat === 'markdown' || previewFormat === 'html') {
     setQuestionPreviewFormat(previewFormat);
@@ -856,8 +895,11 @@ export async function main() {
 
   // Parse and load settings flags early, before init()
   eagerLoadSettings();
+  writeDesktopTerminalDebug('eagerLoadSettings complete');
   profileCheckpoint('main_before_run');
+  writeDesktopTerminalDebug('before run()');
   await run();
+  writeDesktopTerminalDebug('run() resolved');
   profileCheckpoint('main_after_run');
 }
 async function getInputPrompt(prompt: string, inputFormat: 'text' | 'stream-json'): Promise<string | AsyncIterable<string>> {
@@ -887,8 +929,9 @@ async function getInputPrompt(prompt: string, inputFormat: 'text' | 'stream-json
   }
   return prompt;
 }
-async function run(): Promise<CommanderCommand> {
-  profileCheckpoint('run_function_start');
+  async function run(): Promise<CommanderCommand> {
+    profileCheckpoint('run_function_start');
+    writeDesktopTerminalDebug('run() start');
 
   // Create help config that sorts options by long option name.
   // Commander supports compareOptions at runtime but @commander-js/extra-typings
@@ -912,6 +955,9 @@ async function run(): Promise<CommanderCommand> {
   // not when displaying help. This avoids the need for env variable signaling.
   program.hook('preAction', async thisCommand => {
     profileCheckpoint('preAction_start');
+    writeDesktopTerminalDebug(
+      `preAction start command=${thisCommand.name() || 'default'} argv=${JSON.stringify(process.argv.slice(2))}`,
+    );
     // Await async subprocess loads started at module evaluation (lines 12-20).
     // Nearly free — subprocesses complete during the ~135ms of imports above.
     // Must resolve before init() which triggers the first settings read
@@ -919,8 +965,10 @@ async function run(): Promise<CommanderCommand> {
     // → isRemoteManagedSettingsEligible → sync keychain reads otherwise ~65ms).
     await Promise.all([ensureMdmSettingsLoaded(), ensureKeychainPrefetchCompleted()]);
     profileCheckpoint('preAction_after_mdm');
+    writeDesktopTerminalDebug('preAction after mdm/keychain prefetch');
     await init();
     profileCheckpoint('preAction_after_init');
+    writeDesktopTerminalDebug('preAction after init()');
 
     // process.title on Windows sets the console title directly; on POSIX,
     // terminal shell integration may mirror the process name to the tab.
@@ -939,6 +987,7 @@ async function run(): Promise<CommanderCommand> {
     } = await import('./utils/sinks.js');
     initSinks();
     profileCheckpoint('preAction_after_sinks');
+    writeDesktopTerminalDebug('preAction after initSinks()');
 
     // gh-33508: --plugin-dir is a top-level program option. The default
     // action reads it from its own options destructure, but subcommands
@@ -955,6 +1004,7 @@ async function run(): Promise<CommanderCommand> {
     }
     runMigrations();
     profileCheckpoint('preAction_after_migrations');
+    writeDesktopTerminalDebug('preAction after runMigrations()');
 
     // Load remote managed settings for enterprise customers (non-blocking)
     // Fails open - if fetch fails, continues without remote settings
@@ -963,6 +1013,7 @@ async function run(): Promise<CommanderCommand> {
     void loadRemoteManagedSettings();
     void loadPolicyLimits();
     profileCheckpoint('preAction_after_remote_settings');
+    writeDesktopTerminalDebug('preAction after remote settings bootstrap');
 
     // Load settings sync (non-blocking, fail-open)
     // CLI: uploads local settings to remote (CCR download is handled by print.ts)
@@ -970,6 +1021,7 @@ async function run(): Promise<CommanderCommand> {
       void import('./services/settingsSync/index.js').then(m => m.uploadUserSettingsInBackground());
     }
     profileCheckpoint('preAction_after_settings_sync');
+    writeDesktopTerminalDebug('preAction complete');
   });
   program.name('claude').description(`Claude Code - starts an interactive session by default, use -p/--print for non-interactive output`).argument('[prompt]', 'Your prompt', String)
   // Subcommands inherit helpOption via commander's copyInheritedSettings —
@@ -1011,6 +1063,9 @@ async function run(): Promise<CommanderCommand> {
   // --plugin-dir takes exactly one arg; repeat the flag for multiple dirs.
   .option('--plugin-dir <path>', 'Load plugins from a directory for this session only (repeatable: --plugin-dir A --plugin-dir B)', (val: string, prev: string[]) => [...prev, val], [] as string[]).option('--disable-slash-commands', 'Disable all skills', () => true).option('--chrome', 'Enable Claude in Chrome integration').option('--no-chrome', 'Disable Claude in Chrome integration').option('--file <specs...>', 'File resources to download at startup. Format: file_id:relative_path (e.g., --file file_abc:doc.txt file_def:img.png)').action(async (prompt, options) => {
     profileCheckpoint('action_handler_start');
+    writeDesktopTerminalDebug(
+      `default action start promptType=${typeof prompt} argv=${JSON.stringify(process.argv.slice(2))}`,
+    );
 
     // --bare = one-switch minimal mode. Sets SIMPLE so all the existing
     // gates fire (CLAUDE.md, skills, hooks inside executeHooks, agent
@@ -1758,6 +1813,7 @@ async function run(): Promise<CommanderCommand> {
       allowDangerouslySkipPermissions,
       addDirs: addDir
     });
+    writeDesktopTerminalDebug('tool permission context initialized');
     let toolPermissionContext = initResult.toolPermissionContext;
     const {
       warnings,
@@ -1866,6 +1922,9 @@ async function run(): Promise<CommanderCommand> {
     const effectivePrompt = prompt || '';
     let inputPrompt = await getInputPrompt(effectivePrompt, (inputFormat ?? 'text') as 'text' | 'stream-json');
     profileCheckpoint('action_after_input_prompt');
+    writeDesktopTerminalDebug(
+      `input prompt resolved type=${typeof inputPrompt} stream=${typeof inputPrompt !== 'string' && Boolean(inputPrompt)}`,
+    );
 
     // Activate proactive mode BEFORE getTools() so SleepTool.isEnabled()
     // (which returns isProactiveActive()) passes and Sleep is included.
@@ -1908,6 +1967,7 @@ async function run(): Promise<CommanderCommand> {
 
     // IMPORTANT: setup() must be called before any other code that depends on the cwd or worktree setup
     profileCheckpoint('action_before_setup');
+    writeDesktopTerminalDebug('before setup()');
     logForDebugging('[STARTUP] Running setup()...');
     const setupStart = Date.now();
     const {
@@ -1940,6 +2000,7 @@ async function run(): Promise<CommanderCommand> {
     await setupPromise;
     logForDebugging(`[STARTUP] setup() completed in ${Date.now() - setupStart}ms`);
     profileCheckpoint('action_after_setup');
+    writeDesktopTerminalDebug('after setup()');
 
     // Replay user messages into stream-json only when the socket was
     // explicitly requested. The auto-generated socket is passive — it
@@ -2246,6 +2307,7 @@ async function run(): Promise<CommanderCommand> {
       const setupScreensStart = Date.now();
       const onboardingShown = await showSetupScreens(root, permissionMode, allowDangerouslySkipPermissions, commands, enableClaudeInChrome, devChannels);
       logForDebugging(`[STARTUP] showSetupScreens() completed in ${Date.now() - setupScreensStart}ms`);
+      writeDesktopTerminalDebug(`showSetupScreens resolved onboardingShown=${onboardingShown}`);
 
       // Now that trust is established and GrowthBook has auth headers,
       // resolve the --remote-control / --rc entitlement gate.
@@ -3890,8 +3952,10 @@ async function run(): Promise<CommanderCommand> {
   const isCcUrl = process.argv.some(a => a.startsWith('cc://') || a.startsWith('cc+unix://'));
   if (isPrintMode && !isCcUrl) {
     profileCheckpoint('run_before_parse');
+    writeDesktopTerminalDebug('before program.parseAsync() [print mode]');
     await program.parseAsync(process.argv);
     profileCheckpoint('run_after_parse');
+    writeDesktopTerminalDebug('after program.parseAsync() [print mode]');
     return program;
   }
 
@@ -4507,8 +4571,10 @@ Examples:
     });
   }
   profileCheckpoint('run_before_parse');
+  writeDesktopTerminalDebug('before program.parseAsync()');
   await program.parseAsync(process.argv);
   profileCheckpoint('run_after_parse');
+  writeDesktopTerminalDebug('after program.parseAsync()');
 
   // Record final checkpoint for total_time calculation
   profileCheckpoint('main_after_run');

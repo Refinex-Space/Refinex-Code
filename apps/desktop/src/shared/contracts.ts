@@ -170,6 +170,8 @@ export interface VoiceDictationTranscriptionResult {
   durationMs: number;
 }
 
+export type TerminalSessionProfile = "shell" | "thread-tui";
+
 export type VoiceDictationProgressStage =
   | "checking"
   | "downloading"
@@ -190,6 +192,7 @@ export interface VoiceDictationProgressPayload {
 export interface TerminalCreateInput {
   sessionId: string;
   cwd?: string | null;
+  profile?: TerminalSessionProfile;
 }
 
 export interface SessionCreateInput {
@@ -203,6 +206,7 @@ export interface TerminalSessionInfo {
   shellPath: string;
   created: boolean;
   alive: boolean;
+  backlog?: string;
 }
 
 export interface TerminalDataPayload {

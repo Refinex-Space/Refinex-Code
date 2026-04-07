@@ -1,5 +1,14 @@
 import { DropdownMenu } from "@radix-ui/themes";
-import { ArrowUp, Brain, Check, Mic, MicOff, Plus, Zap } from "lucide-react";
+import {
+  ArrowUp,
+  Brain,
+  Check,
+  Mic,
+  MicOff,
+  Package,
+  Plus,
+  Zap,
+} from "lucide-react";
 import {
   useEffect,
   useMemo,
@@ -11,7 +20,9 @@ import { toast } from "sonner";
 import { useVoiceDictation } from "@renderer/hooks/use-voice-dictation";
 import { Tooltip } from "@renderer/components/ui/tooltip";
 import { cn } from "@renderer/lib/cn";
-import { useUIStore } from "@renderer/stores/ui";
+import { getErrorMessage } from "@renderer/lib/errors";
+import { type ThreadConversationMode, useUIStore } from "@renderer/stores/ui";
+import type { SkillRecord, SkillSnapshot } from "../../../../shared/contracts";
 import type {
   DesktopProviderId,
   DesktopProviderSettingsSnapshot,
@@ -27,6 +38,7 @@ import {
 } from "../../../../shared/provider-settings";
 
 const INPUT_MAX_HEIGHT = 152;
+const SKILL_SUGGESTIONS_LIST_ID = "workspace-composer-skill-suggestions";
 const claudeLogoUrl = new URL(
   "../../../../../resources/provider-logos/claude.svg",
   import.meta.url,
@@ -51,6 +63,9 @@ const reasoningLabels: Record<ProviderReasoningEffort, string> = {
 
 interface WorkspaceComposerProps {
   activeSessionTitle: string | null;
+  activeSessionId: string | null;
+  activeWorktreePath: string | null;
+  conversationMode: ThreadConversationMode;
   hasActiveSession: boolean;
   hasWorktree: boolean;
 }
@@ -101,16 +116,135 @@ function getProviderDefaults(
   };
 }
 
+interface SlashSkillSuggestion {
+  id: string;
+  label: string;
+  description: string;
+  commandName: string;
+  insertValue: string;
+}
+
+function shouldShowSlashSkillSuggestions(value: string) {
+  return value.startsWith("/") && !value.includes(" ");
+}
+
+function formatSkillSuggestionLabel(skill: SkillRecord) {
+  const rawLabel =
+    skill.displayName || skill.name.split(":").at(-1) || skill.name;
+
+  return rawLabel
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
+function buildSlashSkillSuggestions(
+  value: string,
+  snapshot: SkillSnapshot | null,
+): SlashSkillSuggestion[] {
+  if (!snapshot || !shouldShowSlashSkillSuggestions(value)) {
+    return [];
+  }
+
+  const query = value.slice(1).trim().toLowerCase();
+  const invocableSkills = snapshot.skills.filter((skill) => skill.userInvocable);
+
+  if (query.length === 0) {
+    return invocableSkills.map((skill) => ({
+      id: skill.id,
+      label: formatSkillSuggestionLabel(skill),
+      description: skill.description.replace(/\s+/g, " ").trim(),
+      commandName: skill.name,
+      insertValue: `/${skill.name} `,
+    }));
+  }
+
+  return invocableSkills
+    .map((skill, index) => {
+      const displayName = (skill.displayName || skill.name).toLowerCase();
+      const normalizedName = skill.name.toLowerCase();
+      const description = skill.description.toLowerCase().replace(/\s+/g, " ");
+      const parts = [...new Set([
+        ...normalizedName.split(/[:_-]/g),
+        ...displayName.split(/[:_-]/g),
+      ])].filter(Boolean);
+
+      let score = Number.POSITIVE_INFINITY;
+
+      if (normalizedName === query || displayName === query) {
+        score = 0;
+      } else if (normalizedName.startsWith(query)) {
+        score = 1;
+      } else if (displayName.startsWith(query)) {
+        score = 2;
+      } else if (parts.some((part) => part.startsWith(query))) {
+        score = 3;
+      } else if (
+        normalizedName.includes(query) ||
+        displayName.includes(query)
+      ) {
+        score = 4;
+      } else if (description.includes(query)) {
+        score = 5;
+      }
+
+      if (!Number.isFinite(score)) {
+        return null;
+      }
+
+      return {
+        index,
+        score,
+        suggestion: {
+          id: skill.id,
+          label: formatSkillSuggestionLabel(skill),
+          description: skill.description.replace(/\s+/g, " ").trim(),
+          commandName: skill.name,
+          insertValue: `/${skill.name} `,
+        },
+      };
+    })
+    .filter(
+      (
+        entry,
+      ): entry is {
+        index: number;
+        score: number;
+        suggestion: SlashSkillSuggestion;
+      } => entry !== null,
+    )
+    .sort((left, right) => {
+      if (left.score !== right.score) {
+        return left.score - right.score;
+      }
+
+      return left.index - right.index;
+    })
+    .map((entry) => entry.suggestion);
+}
+
 export function WorkspaceComposer({
   activeSessionTitle,
+  activeSessionId,
+  activeWorktreePath,
+  conversationMode,
   hasActiveSession,
   hasWorktree,
 }: WorkspaceComposerProps) {
   const [value, setValue] = useState("");
   const [providerSnapshot, setProviderSnapshot] =
     useState<DesktopProviderSettingsSnapshot | null>(null);
+  const [skillSnapshot, setSkillSnapshot] = useState<SkillSnapshot | null>(null);
+  const [selectedSkillPills, setSelectedSkillPills] = useState<
+    SlashSkillSuggestion[]
+  >([]);
+  const [selectedSkillSuggestionIndex, setSelectedSkillSuggestionIndex] =
+    useState(0);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const hasDraft = value.trim().length > 0;
+  const skillSuggestionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const composerValue = `${selectedSkillPills.map((skill) => skill.insertValue).join("")}${value}`;
+  const hasDraft = composerValue.trim().length > 0;
   const canSend = hasActiveSession && hasDraft;
   const canUseDictation = hasActiveSession;
 
@@ -161,6 +295,27 @@ export function WorkspaceComposer({
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    void window.desktopApp
+      .getSkillsSnapshot()
+      .then((snapshot) => {
+        if (!cancelled) {
+          setSkillSnapshot(snapshot);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSkillSnapshot(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorktreePath]);
+
+  useEffect(() => {
     if (!providerSnapshot || composerControlsHydrated) {
       return;
     }
@@ -205,6 +360,11 @@ export function WorkspaceComposer({
   const effortButtonLabel = effortSupported
     ? reasoningLabels[composerEffort]
     : "N/A";
+  const skillSuggestions = useMemo(
+    () => buildSlashSkillSuggestions(value, skillSnapshot),
+    [skillSnapshot, value],
+  );
+  const showSkillSuggestions = hasActiveSession && skillSuggestions.length > 0;
 
   const placeholder = !hasWorktree
     ? "先打开一个项目，再从左侧创建或选择线程"
@@ -222,18 +382,51 @@ export function WorkspaceComposer({
     element.style.height = `${Math.min(element.scrollHeight, INPUT_MAX_HEIGHT)}px`;
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!canSend) {
       return;
     }
 
-    toast.info("TODO：消息发送能力待接入");
+    if (conversationMode === "gui") {
+      toast.info("GUI 模式敬请期待，先使用 TUI 专注模式。");
+      return;
+    }
+
+    if (!activeSessionId) {
+      return;
+    }
+
+    const terminalSessionId = `thread-tui:${activeSessionId}`;
+    const normalizedInput = `${composerValue.replace(/\r?\n/g, "\r")}\r`;
+
+    try {
+      await window.desktopApp.createTerminalSession({
+        sessionId: terminalSessionId,
+        cwd: activeWorktreePath ?? undefined,
+        profile: "thread-tui",
+      });
+      await window.desktopApp.writeTerminal(terminalSessionId, normalizedInput);
+      setSelectedSkillPills([]);
+      applyValue("");
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
   };
 
   const applyValue = (nextValue: string) => {
     setValue(nextValue);
     requestAnimationFrame(() => {
       handleInput();
+    });
+  };
+
+  const applySkillSuggestion = (suggestion: SlashSkillSuggestion) => {
+    setSelectedSkillPills((current) => [...current, suggestion]);
+    setSelectedSkillSuggestionIndex(0);
+    applyValue("");
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(0, 0);
     });
   };
 
@@ -259,7 +452,71 @@ export function WorkspaceComposer({
     },
   });
 
+  useEffect(() => {
+    if (!showSkillSuggestions) {
+      setSelectedSkillSuggestionIndex(0);
+      return;
+    }
+
+    setSelectedSkillSuggestionIndex((current) => {
+      if (current >= skillSuggestions.length) {
+        return 0;
+      }
+
+      return current;
+    });
+  }, [showSkillSuggestions, skillSuggestions.length, value]);
+
+  useEffect(() => {
+    if (!showSkillSuggestions) {
+      skillSuggestionRefs.current = [];
+      return;
+    }
+
+    const activeSuggestion = skillSuggestionRefs.current[selectedSkillSuggestionIndex];
+    if (typeof activeSuggestion?.scrollIntoView === "function") {
+      activeSuggestion.scrollIntoView({
+        block: "nearest",
+      });
+    }
+  }, [selectedSkillSuggestionIndex, showSkillSuggestions]);
+
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (
+      selectedSkillPills.length > 0 &&
+      value.length === 0 &&
+      (event.key === "Backspace" || event.key === "Delete")
+    ) {
+      event.preventDefault();
+      setSelectedSkillPills((current) => current.slice(0, -1));
+      return;
+    }
+
+    if (showSkillSuggestions && event.key === "ArrowDown") {
+      event.preventDefault();
+      setSelectedSkillSuggestionIndex((current) =>
+        current >= skillSuggestions.length - 1 ? 0 : current + 1,
+      );
+      return;
+    }
+
+    if (showSkillSuggestions && event.key === "ArrowUp") {
+      event.preventDefault();
+      setSelectedSkillSuggestionIndex((current) =>
+        current <= 0 ? skillSuggestions.length - 1 : current - 1,
+      );
+      return;
+    }
+
+    if (showSkillSuggestions && event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      const selectedSkill = skillSuggestions[selectedSkillSuggestionIndex];
+      if (selectedSkill) {
+        applySkillSuggestion(selectedSkill);
+      }
+      return;
+    }
+
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       handleSend();
@@ -295,21 +552,119 @@ export function WorkspaceComposer({
   };
 
   return (
-    <div className="w-full max-w-[920px]">
+    <div
+      className="mx-auto w-full max-w-[920px]"
+      data-thread-composer="surface"
+    >
       <div className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-panel)] p-2 backdrop-blur-xl">
-        <div className="px-3 pt-1">
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-            onInput={handleInput}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            disabled={!hasActiveSession}
-            aria-label={activeSessionTitle ?? "Session composer"}
-            className="max-h-[152px] min-h-[52px] w-full resize-none overflow-y-auto bg-transparent px-1 py-1 text-[length:var(--ui-font-size-lg)] leading-6 text-[var(--color-fg)] outline-none placeholder:text-[var(--color-muted)] disabled:cursor-not-allowed disabled:placeholder:text-[var(--color-muted)]"
-          />
+        <div className="relative px-3 pt-1">
+          {showSkillSuggestions ? (
+            <div
+              id={SKILL_SUGGESTIONS_LIST_ID}
+              role="listbox"
+              aria-label="Skill suggestions"
+              className="absolute inset-x-3 bottom-full z-20 mb-2 max-h-56 overflow-y-auto rounded-[18px] border border-[var(--color-border)] bg-[var(--color-panel)] p-2 shadow-[var(--shadow-panel)] backdrop-blur-xl"
+            >
+              <div className="px-2 pb-2 pt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--color-muted)]">
+                技能
+              </div>
+              <div className="space-y-1">
+                {skillSuggestions.map((suggestion, index) => {
+                  const selected = index === selectedSkillSuggestionIndex;
+                  return (
+                    <button
+                      key={suggestion.id}
+                      id={`${SKILL_SUGGESTIONS_LIST_ID}-${suggestion.id}`}
+                      ref={(node) => {
+                        skillSuggestionRefs.current[index] = node;
+                      }}
+                      type="button"
+                      role="option"
+                      aria-selected={selected}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                      }}
+                      onMouseEnter={() => {
+                        setSelectedSkillSuggestionIndex(index);
+                      }}
+                      onClick={() => {
+                        applySkillSuggestion(suggestion);
+                      }}
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-[14px] px-3 py-2 text-left transition-colors duration-150",
+                        selected
+                          ? "bg-[rgba(148,163,184,0.14)]"
+                          : "hover:bg-[rgba(148,163,184,0.06)]",
+                      )}
+                    >
+                      <span className="flex min-w-0 max-w-[44%] shrink items-center gap-2">
+                        <span
+                          className={cn(
+                            "flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+                            selected
+                              ? "bg-[rgba(99,102,241,0.18)] text-[rgb(79,70,229)]"
+                              : "bg-[rgba(148,163,184,0.12)] text-[var(--color-muted)]",
+                          )}
+                        >
+                          <Package className="h-3.5 w-3.5" aria-hidden="true" />
+                        </span>
+                        <span className="truncate text-[13px] font-medium text-[var(--color-fg)]">
+                          {suggestion.label}
+                        </span>
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[11px] leading-5 text-[var(--color-muted)]">
+                        {suggestion.description}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+          <div
+            className="flex min-h-[52px] flex-wrap items-start gap-2 px-1 py-1"
+            onClick={() => {
+              textareaRef.current?.focus();
+            }}
+          >
+            {selectedSkillPills.map((skill, index) => (
+              <div
+                key={`${skill.id}-${index}`}
+                className="inline-flex h-6 shrink-0 items-center gap-1 self-start rounded-full bg-[linear-gradient(180deg,rgba(232,224,255,0.92)_0%,rgba(236,232,255,0.72)_100%)] px-2.5 py-0 text-[length:var(--ui-font-size-lg)] leading-6 text-[rgba(109,40,217,0.96)] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:bg-[linear-gradient(180deg,rgba(55,48,163,0.24)_0%,rgba(49,46,129,0.28)_100%)] dark:text-[rgb(196,181,253)]"
+                data-selected-skill-pill={skill.commandName}
+                aria-label={`已选择技能 ${skill.label}`}
+              >
+                <Package className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span className="truncate font-medium">{skill.label}</span>
+              </div>
+            ))}
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              onInput={handleInput}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              disabled={!hasActiveSession}
+              aria-label={activeSessionTitle ?? "Session composer"}
+              aria-controls={
+                showSkillSuggestions ? SKILL_SUGGESTIONS_LIST_ID : undefined
+              }
+              aria-expanded={showSkillSuggestions}
+              aria-activedescendant={
+                showSkillSuggestions
+                  ? `${SKILL_SUGGESTIONS_LIST_ID}-${skillSuggestions[selectedSkillSuggestionIndex]?.id ?? ""}`
+                  : undefined
+              }
+              className={cn(
+                "max-h-[152px] resize-none overflow-y-auto bg-transparent text-[length:var(--ui-font-size-lg)] leading-6 text-[var(--color-fg)] outline-none placeholder:text-[var(--color-muted)] disabled:cursor-not-allowed disabled:placeholder:text-[var(--color-muted)]",
+                selectedSkillPills.length > 0
+                  ? "min-h-[44px] min-w-[180px] flex-1 px-0 py-0"
+                  : "min-h-[52px] w-full px-1 py-1",
+              )}
+            />
+          </div>
         </div>
 
         <div className="mt-1.5 flex items-end justify-between gap-3 px-2 pb-1">
@@ -438,7 +793,11 @@ export function WorkspaceComposer({
 
             <Tooltip
               content={
-                canSend ? "发送消息（TODO）" : "输入内容并选择线程后可发送"
+                !canSend
+                  ? "输入内容并选择线程后可发送"
+                  : conversationMode === "gui"
+                    ? "GUI 模式敬请期待"
+                    : "发送到当前线程 TUI"
               }
             >
               <button
@@ -451,7 +810,13 @@ export function WorkspaceComposer({
                     ? "bg-[var(--color-fg)] text-[var(--color-bg)] shadow-[0_12px_24px_rgba(15,23,42,0.22)] hover:scale-[1.02]"
                     : "bg-[var(--color-surface)] text-[var(--color-muted)] shadow-none",
                 )}
-                aria-label={canSend ? "发送消息（TODO）" : "发送消息不可用"}
+                aria-label={
+                  !canSend
+                    ? "发送消息不可用"
+                    : conversationMode === "gui"
+                      ? "发送到 GUI 模式"
+                      : "发送到当前线程 TUI"
+                }
               >
                 <ArrowUp className="h-4 w-4" aria-hidden="true" />
               </button>

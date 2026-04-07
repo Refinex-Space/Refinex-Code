@@ -29,6 +29,12 @@
   --color-muted: #667085;
   --color-accent: #cfd5de;
   --color-accent-strong: #d7dce4;
+  --color-thread-mode-toggle-bg: rgba(255, 255, 255, 0.78);
+  --color-thread-mode-toggle-active-bg: #0f172a;
+  --color-thread-mode-toggle-active-fg: #ffffff;
+  --color-thread-mode-toggle-inactive-fg: #667085;
+  --color-thread-mode-toggle-hover-fg: #0f172a;
+  --color-thread-mode-toggle-hover-bg: rgba(15, 23, 42, 0.04);
   --color-terminal-bg: #0b1018;
   --color-terminal-fg: #dbe5f4;
   --color-terminal-muted: #8191ab;
@@ -50,7 +56,30 @@
   --color-terminal-ansi-bright-magenta: #d8b4fe;
   --color-terminal-ansi-bright-cyan: #67e8f9;
   --color-terminal-ansi-bright-white: #f8fbff;
+  --color-terminal-embedded-bg: rgba(255, 255, 255, 0);
+  --color-terminal-embedded-fg: #162033;
+  --color-terminal-embedded-cursor: #162033;
+  --color-terminal-embedded-cursor-accent: #f8fafc;
+  --color-terminal-embedded-selection: rgba(148, 163, 184, 0.24);
+  --color-terminal-embedded-selection-inactive: rgba(148, 163, 184, 0.14);
+  --color-terminal-embedded-ansi-black: #475569;
+  --color-terminal-embedded-ansi-red: #dc2626;
+  --color-terminal-embedded-ansi-green: #15803d;
+  --color-terminal-embedded-ansi-yellow: #a16207;
+  --color-terminal-embedded-ansi-blue: #2563eb;
+  --color-terminal-embedded-ansi-magenta: #9333ea;
+  --color-terminal-embedded-ansi-cyan: #0f766e;
+  --color-terminal-embedded-ansi-white: #64748b;
+  --color-terminal-embedded-ansi-bright-black: #94a3b8;
+  --color-terminal-embedded-ansi-bright-red: #ef4444;
+  --color-terminal-embedded-ansi-bright-green: #16a34a;
+  --color-terminal-embedded-ansi-bright-yellow: #ca8a04;
+  --color-terminal-embedded-ansi-bright-blue: #3b82f6;
+  --color-terminal-embedded-ansi-bright-magenta: #a855f7;
+  --color-terminal-embedded-ansi-bright-cyan: #0891b2;
+  --color-terminal-embedded-ansi-bright-white: #0f172a;
   --shadow-panel: 0 18px 42px rgba(15, 23, 42, 0.07);
+  --shadow-thread-mode-toggle-active: 0 6px 14px rgba(15, 23, 42, 0.14);
   --sidebar-width: 258px;
   --titlebar-height: 58px;
 }
@@ -69,6 +98,12 @@
   --color-muted: #9298a3;
   --color-accent: #3a404a;
   --color-accent-strong: #565e6b;
+  --color-thread-mode-toggle-bg: rgba(10, 12, 16, 0.88);
+  --color-thread-mode-toggle-active-bg: #252a33;
+  --color-thread-mode-toggle-active-fg: #f5f7fa;
+  --color-thread-mode-toggle-inactive-fg: #808895;
+  --color-thread-mode-toggle-hover-fg: #e3e8ef;
+  --color-thread-mode-toggle-hover-bg: rgba(245, 247, 250, 0.06);
   --color-terminal-bg: #030712;
   --color-terminal-fg: #dbe5f4;
   --color-terminal-muted: #8191ab;
@@ -90,7 +125,30 @@
   --color-terminal-ansi-bright-magenta: #d8b4fe;
   --color-terminal-ansi-bright-cyan: #67e8f9;
   --color-terminal-ansi-bright-white: #f8fbff;
+  --color-terminal-embedded-bg: rgba(0, 0, 0, 0);
+  --color-terminal-embedded-fg: #e5edf8;
+  --color-terminal-embedded-cursor: #f5f7fa;
+  --color-terminal-embedded-cursor-accent: #020617;
+  --color-terminal-embedded-selection: rgba(148, 163, 184, 0.24);
+  --color-terminal-embedded-selection-inactive: rgba(148, 163, 184, 0.16);
+  --color-terminal-embedded-ansi-black: #475569;
+  --color-terminal-embedded-ansi-red: #f87171;
+  --color-terminal-embedded-ansi-green: #4ade80;
+  --color-terminal-embedded-ansi-yellow: #fbbf24;
+  --color-terminal-embedded-ansi-blue: #60a5fa;
+  --color-terminal-embedded-ansi-magenta: #c084fc;
+  --color-terminal-embedded-ansi-cyan: #22d3ee;
+  --color-terminal-embedded-ansi-white: #e2e8f0;
+  --color-terminal-embedded-ansi-bright-black: #94a3b8;
+  --color-terminal-embedded-ansi-bright-red: #fca5a5;
+  --color-terminal-embedded-ansi-bright-green: #86efac;
+  --color-terminal-embedded-ansi-bright-yellow: #fcd34d;
+  --color-terminal-embedded-ansi-bright-blue: #93c5fd;
+  --color-terminal-embedded-ansi-bright-magenta: #d8b4fe;
+  --color-terminal-embedded-ansi-bright-cyan: #67e8f9;
+  --color-terminal-embedded-ansi-bright-white: #f8fafc;
   --shadow-panel: 0 18px 48px rgba(0, 0, 0, 0.46);
+  --shadow-thread-mode-toggle-active: 0 8px 18px rgba(0, 0, 0, 0.34);
 }
 
 *,
@@ -148,6 +206,60 @@ input,
 textarea,
 select {
   -webkit-app-region: no-drag;
+}
+
+[data-terminal-chrome="embedded"] .xterm,
+[data-terminal-chrome="embedded"] .xterm-viewport,
+[data-terminal-chrome="embedded"] .xterm-screen,
+[data-terminal-chrome="embedded"] .xterm-scroll-area,
+[data-terminal-chrome="embedded"] .xterm-scrollable-element,
+[data-terminal-chrome="embedded"] .xterm-helper-textarea {
+  background: transparent !important;
+}
+
+[data-terminal-chrome="embedded"] .xterm canvas {
+  background: transparent !important;
+}
+
+[data-terminal-chrome="embedded"] .xterm {
+  height: 100%;
+}
+
+[data-terminal-chrome="embedded"] .xterm-screen,
+[data-terminal-chrome="embedded"] .xterm-viewport {
+  width: 100% !important;
+}
+
+[data-terminal-chrome="embedded"] .xterm .xterm-scrollable-element > .scrollbar.vertical {
+  width: 6px !important;
+  right: 2px !important;
+}
+
+[data-terminal-chrome="embedded"] .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
+  width: 6px !important;
+  left: 0 !important;
+  border-radius: 999px !important;
+  background: rgba(22, 32, 51, 0.18) !important;
+}
+
+[data-terminal-chrome="embedded"] .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider:hover {
+  background: rgba(22, 32, 51, 0.28) !important;
+}
+
+[data-terminal-chrome="embedded"] .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider.active {
+  background: rgba(22, 32, 51, 0.36) !important;
+}
+
+:root[data-theme="dark"] [data-terminal-chrome="embedded"] .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
+  background: rgba(229, 237, 248, 0.18) !important;
+}
+
+:root[data-theme="dark"] [data-terminal-chrome="embedded"] .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider:hover {
+  background: rgba(229, 237, 248, 0.26) !important;
+}
+
+:root[data-theme="dark"] [data-terminal-chrome="embedded"] .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider.active {
+  background: rgba(229, 237, 248, 0.34) !important;
 }
 
 :root[data-pointer-cursor="enabled"] button:not(:disabled),

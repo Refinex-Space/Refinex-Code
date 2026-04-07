@@ -120,7 +120,7 @@ import { useMaybeTruncateInput } from './useMaybeTruncateInput.js';
 import { usePromptInputPlaceholder } from './usePromptInputPlaceholder.js';
 import { useShowFastIconHint } from './useShowFastIconHint.js';
 import { useSwarmBanner } from './useSwarmBanner.js';
-import { isNonSpacePrintable, isVimModeEnabled } from './utils.js';
+import { isNonSpacePrintable, isVimModeEnabled, shouldHidePromptChrome } from './utils.js';
 type Props = {
   debug: boolean;
   ideSelection: IDESelection | undefined;
@@ -2241,6 +2241,13 @@ function PromptInput({
       </Box>;
   }
   const textInputElement = isVimModeEnabled() ? <VimTextInput {...baseProps} initialMode={vimMode} onModeChange={setVimMode} /> : <TextInput {...baseProps} />;
+  if (shouldHidePromptChrome()) {
+    return <Box height={0} overflow="hidden">
+        <Box flexGrow={1} flexShrink={1} onClick={handleInputClick}>
+          {textInputElement}
+        </Box>
+      </Box>;
+  }
   return <Box flexDirection="column" marginTop={briefOwnsGap ? 0 : 1}>
       {!isFullscreenEnvEnabled() && <PromptInputQueuedCommands />}
       {hasSuppressedDialogs && <Box marginTop={1} marginLeft={2}>

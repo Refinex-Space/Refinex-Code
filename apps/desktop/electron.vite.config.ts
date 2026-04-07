@@ -5,7 +5,7 @@ import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ include: ["node-pty"] })],
   },
   preload: {
     plugins: [externalizeDepsPlugin()],

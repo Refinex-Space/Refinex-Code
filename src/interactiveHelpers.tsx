@@ -29,6 +29,28 @@ import type { PermissionMode } from './utils/permissions/PermissionMode.js';
 import { getBaseRenderOptions } from './utils/renderOptions.js';
 import { getSettingsWithAllErrors } from './utils/settings/allErrors.js';
 import { hasAutoModeOptIn, hasSkipDangerousModePermissionPrompt } from './utils/settings/settings.js';
+
+const desktopTerminalDebugTarget = process.env.REFINEX_DESKTOP_TERMINAL_DEBUG;
+
+function writeDesktopTerminalDebug(message: string): void {
+  if (!desktopTerminalDebugTarget) {
+    return;
+  }
+
+  const outputPath =
+    desktopTerminalDebugTarget === '1'
+      ? '/tmp/refinex-desktop-terminal-debug.log'
+      : desktopTerminalDebugTarget;
+
+  try {
+    appendFileSync(
+      outputPath,
+      `[interactive ${new Date().toISOString()} pid=${process.pid}] ${message}\n`,
+    );
+  } catch {
+    // 调试日志失败时不能影响交互界面。
+  }
+}
 export function completeOnboarding(): void {
   saveGlobalConfig(current => ({
     ...current,
@@ -39,6 +61,7 @@ export function completeOnboarding(): void {
 export function showDialog<T = void>(root: Root, renderer: (done: (result: T) => void) => React.ReactNode): Promise<T> {
   return new Promise<T>(resolve => {
     const done = (result: T): void => void resolve(result);
+    writeDesktopTerminalDebug('showDialog -> root.render()');
     root.render(renderer(done));
   });
 }
@@ -96,9 +119,12 @@ export function showSetupDialog<T = void>(root: Root, renderer: (done: (result: 
  * Handles the common epilogue: start deferred prefetches, wait for exit, graceful shutdown.
  */
 export async function renderAndRun(root: Root, element: React.ReactNode): Promise<void> {
+  writeDesktopTerminalDebug('renderAndRun -> root.render()');
   root.render(element);
   startDeferredPrefetches();
+  writeDesktopTerminalDebug('renderAndRun -> waitUntilExit()');
   await root.waitUntilExit();
+  writeDesktopTerminalDebug('renderAndRun -> waitUntilExit resolved');
   await gracefulShutdown(0);
 }
 export async function showSetupScreens(root: Root, permissionMode: PermissionMode, allowDangerouslySkipPermissions: boolean, commands?: Command[], claudeInChrome?: boolean, devChannels?: ChannelEntry[]): Promise<boolean> {
@@ -303,6 +329,9 @@ export function getRenderContext(exitOnCtrlC: boolean): {
 } {
   let lastFlickerTime = 0;
   const baseOptions = getBaseRenderOptions(exitOnCtrlC);
+  writeDesktopTerminalDebug(
+    `getRenderContext exitOnCtrlC=${exitOnCtrlC} stdinOverride=${Boolean(baseOptions.stdin)}`,
+  );
 
   // Log analytics event when stdin override is active
   if (baseOptions.stdin) {

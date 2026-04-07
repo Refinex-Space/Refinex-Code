@@ -1,0 +1,61 @@
+import { useUIStore } from "@renderer/stores/ui";
+import { cn } from "@renderer/lib/cn";
+
+interface ThreadModeToggleProps {
+  sessionId: string | null;
+  className?: string;
+}
+
+export function ThreadModeToggle({
+  sessionId,
+  className,
+}: ThreadModeToggleProps) {
+  const threadConversationModes = useUIStore(
+    (state) => state.threadConversationModes,
+  );
+  const setThreadConversationMode = useUIStore(
+    (state) => state.setThreadConversationMode,
+  );
+
+  if (!sessionId) {
+    return null;
+  }
+
+  const activeMode = threadConversationModes[sessionId] ?? "tui";
+
+  return (
+    <div
+      className={cn(
+        "inline-flex items-center rounded-full border border-[var(--color-border)] bg-[var(--color-thread-mode-toggle-bg)] p-[3px] backdrop-blur-lg",
+        className,
+      )}
+      role="tablist"
+      aria-label="线程交互模式"
+    >
+      {(["gui", "tui"] as const).map((mode) => {
+        const label = mode === "gui" ? "GUI" : "TUI";
+        const active = activeMode === mode;
+
+        return (
+          <button
+            key={mode}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            aria-label={`切换到 ${label} 模式`}
+            onClick={() => {
+              setThreadConversationMode(sessionId, mode);
+            }}
+            className={
+              active
+                ? "flex h-6 min-w-[38px] items-center justify-center rounded-full bg-[var(--color-thread-mode-toggle-active-bg)] px-2 text-[10px] font-semibold tracking-[0.06em] text-[var(--color-thread-mode-toggle-active-fg)] shadow-[var(--shadow-thread-mode-toggle-active)] transition-colors duration-150"
+                : "flex h-6 min-w-[38px] items-center justify-center rounded-full px-2 text-[10px] font-semibold tracking-[0.06em] text-[var(--color-thread-mode-toggle-inactive-fg)] transition-colors duration-150 hover:bg-[var(--color-thread-mode-toggle-hover-bg)] hover:text-[var(--color-thread-mode-toggle-hover-fg)]"
+            }
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}

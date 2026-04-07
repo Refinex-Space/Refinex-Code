@@ -26,6 +26,7 @@ import { Button } from "@renderer/components/ui/button";
 import { Kbd } from "@renderer/components/ui/kbd";
 import { Tooltip } from "@renderer/components/ui/tooltip";
 import { WorkspaceHome } from "@renderer/components/workspace/workspace-home";
+import { ThreadModeToggle } from "@renderer/components/workspace/thread-mode-toggle";
 import { useDesktopShell } from "@renderer/hooks/use-desktop-shell";
 import { useKeyboardShortcuts } from "@renderer/hooks/use-keyboard-shortcuts";
 import { getErrorMessage } from "@renderer/lib/errors";
@@ -197,10 +198,22 @@ export function Layout() {
 
       <section className="relative z-10 flex min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
         <header
-          className="flex h-[var(--titlebar-height)] items-center justify-between gap-4 px-5"
+          className="relative flex h-[var(--titlebar-height)] items-center justify-between gap-4 px-5"
           data-window-drag-region
         >
           <div className="min-w-0 flex-1" data-window-drag-region />
+
+          {!isSettingsView && !isSkillsView ? (
+            <div
+              className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center px-24"
+              data-window-drag-region
+            >
+              <ThreadModeToggle
+                sessionId={activeSession?.id ?? null}
+                className="pointer-events-auto"
+              />
+            </div>
+          ) : null}
 
           {isSettingsView ? null : (
             <div className="flex items-center gap-2" data-no-drag>
@@ -326,7 +339,11 @@ export function Layout() {
         {terminalOpen && !isSettingsView && !isSkillsView ? (
           <TerminalPanel
             sessionId={
-              activeSession?.id ?? activeWorktree?.id ?? "global-shell"
+              activeSession
+                ? `shell:${activeSession.id}`
+                : activeWorktree
+                  ? `shell:${activeWorktree.id}`
+                  : "shell:global"
             }
             cwd={
               activeWorktree?.worktreePath ??

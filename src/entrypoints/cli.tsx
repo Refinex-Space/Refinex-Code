@@ -1,4 +1,5 @@
 import { feature } from 'bun:bundle';
+import { appendFileSync } from 'fs';
 
 // Bugfix for corepack auto-pinning, which adds yarnpkg to peoples' package.jsons
 // eslint-disable-next-line custom-rules/no-top-level-side-effects
@@ -31,6 +32,34 @@ if (feature('ABLATION_BASELINE') && process.env.CLAUDE_CODE_ABLATION_BASELINE) {
  * Fast-path for --version has zero imports beyond this file.
  */
 async function main(): Promise<void> {
+  const debugTarget = process.env.REFINEX_DESKTOP_TERMINAL_DEBUG;
+  const writeDesktopTerminalDebug = (message: string): void => {
+    if (!debugTarget) {
+      return;
+    }
+
+    const outputPath =
+      debugTarget === '1'
+        ? '/tmp/refinex-desktop-terminal-debug.log'
+        : debugTarget
+
+    try {
+      appendFileSync(
+        outputPath,
+        `[cli-entry ${new Date().toISOString()} pid=${process.pid}] ${message}\n`,
+      )
+    } catch {
+      // 调试日志失败时不能影响 CLI 正常启动。
+    }
+  }
+
+  writeDesktopTerminalDebug(
+    `main start argv=${JSON.stringify(process.argv.slice(2))} tty=${JSON.stringify({
+      stdin: process.stdin.isTTY,
+      stdout: process.stdout.isTTY,
+      stderr: process.stderr.isTTY,
+    })} entrypoint=${process.env.CLAUDE_CODE_ENTRYPOINT ?? 'unset'}`,
+  )
   const args = process.argv.slice(2);
 
   // Fast-path for --version/-v: zero module loading needed
@@ -288,13 +317,17 @@ async function main(): Promise<void> {
   const {
     startCapturingEarlyInput
   } = await import('../utils/earlyInput.js');
+  writeDesktopTerminalDebug('about to start early input capture')
   startCapturingEarlyInput();
+  writeDesktopTerminalDebug('early input capture started')
   profileCheckpoint('cli_before_main_import');
   const {
     main: cliMain
   } = await import('../main.js');
+  writeDesktopTerminalDebug('main.js imported')
   profileCheckpoint('cli_after_main_import');
   await cliMain();
+  writeDesktopTerminalDebug('cli main resolved')
   profileCheckpoint('cli_after_main_complete');
 }
 

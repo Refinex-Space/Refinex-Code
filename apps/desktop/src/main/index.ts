@@ -1,7 +1,8 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { spawn as spawnPty, type IPty } from "node-pty";
 import type {
   AppInfo,
   AppearanceSettingsData,
@@ -23,6 +24,7 @@ import type {
   TerminalCreateInput,
   TerminalDataPayload,
   TerminalExitPayload,
+  TerminalSessionProfile,
   TerminalSessionInfo,
   VoiceDictationProgressPayload,
   VoiceDictationTranscriptionInput,
@@ -50,23 +52,49 @@ import {
   prepareVoiceDictation,
   transcribeVoiceDictation,
 } from "./voice-dictation";
+import { getThreadTuiEnvOverrides } from "./thread-tui-env";
 import { createWorktreeStateStore } from "./worktree-state-store";
 
 interface TerminalSession {
   id: string;
   cwd: string;
   shellPath: string;
-  process: ChildProcessWithoutNullStreams;
+  profile: TerminalSessionProfile;
+  process: IPty;
+  backlog: string;
 }
 
 const terminalSessions = new Map<string, TerminalSession>();
 const appName = "RWork";
+const require = createRequire(import.meta.url);
+const TERMINAL_BACKLOG_LIMIT = 512_000;
+const desktopTerminalDebugTarget = process.env.REFINEX_DESKTOP_TERMINAL_DEBUG;
 
 let mainWindow: BrowserWindow | null = null;
 let worktreeStateStore: ReturnType<typeof createWorktreeStateStore> | null = null;
 let appearanceSettingsStore: ReturnType<typeof createAppearanceSettingsStore> | null = null;
 let providerSettingsStore: ReturnType<typeof createProviderSettingsStore> | null = null;
 let mcpSettingsStore: ReturnType<typeof createMcpSettingsStore> | null = null;
+
+function writeDesktopTerminalDebug(scope: string, message: string) {
+  if (!desktopTerminalDebugTarget) {
+    return;
+  }
+
+  const outputPath =
+    desktopTerminalDebugTarget === "1"
+      ? "/tmp/refinex-desktop-terminal-debug.log"
+      : desktopTerminalDebugTarget;
+
+  try {
+    appendFileSync(
+      outputPath,
+      `[desktop-main ${new Date().toISOString()} pid=${process.pid} ${scope}] ${message}\n`,
+    );
+  } catch {
+    // 调试日志失败时不能影响终端会话生命周期。
+  }
+}
 
 function resolveAppIconPath() {
   const candidates = [
@@ -102,6 +130,93 @@ function resolveTerminalPath(pathname: string | null | undefined): string {
   return pathname && isDirectory(pathname) ? pathname : app.getPath("home");
 }
 
+function resolveDesktopRepoRoot(): string | null {
+  const candidates = [
+    join(__dirname, "../../../.."),
+    join(__dirname, "../../../../../"),
+    process.cwd(),
+  ];
+
+  return (
+    candidates.find((candidate) => existsSync(join(candidate, "bin/rcode"))) ??
+    null
+  );
+}
+
+function resolveNodePtySpawnHelperPath() {
+  if (process.platform === "win32") {
+    return null;
+  }
+
+  try {
+    const packageRoot = dirname(require.resolve("node-pty/package.json"));
+    const helperPath = join(
+      packageRoot,
+      `prebuilds/${process.platform}-${process.arch}/spawn-helper`,
+    )
+      .replace("app.asar", "app.asar.unpacked")
+      .replace("node_modules.asar", "node_modules.asar.unpacked");
+
+    return existsSync(helperPath) ? helperPath : null;
+  } catch {
+    return null;
+  }
+}
+
+function ensureNodePtySpawnHelperExecutable() {
+  const helperPath = resolveNodePtySpawnHelperPath();
+  if (!helperPath) {
+    return;
+  }
+
+  try {
+    const mode = statSync(helperPath).mode;
+    if ((mode & 0o111) !== 0) {
+      return;
+    }
+
+    // node-pty 的 spawn-helper 如果丢失执行位，forkpty 会直接报 posix_spawnp failed。
+    chmodSync(helperPath, 0o755);
+  } catch (error) {
+    console.warn(
+      `[terminal] failed to prepare node-pty spawn-helper: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+}
+
+function resolveThreadTuiLaunchSpec() {
+  const repoRoot = resolveDesktopRepoRoot();
+  if (!repoRoot) {
+    return {
+      command: "bun",
+      args: ["run", "dev"],
+    };
+  }
+
+  const launcherPath = join(repoRoot, "bin/rcode");
+  if (existsSync(launcherPath)) {
+    return {
+      command: launcherPath,
+      args: [] as string[],
+    };
+  }
+
+  const entryPath = join(repoRoot, "src/dev-entry.ts");
+  if (existsSync(entryPath)) {
+    return {
+      command: "bun",
+      args: [entryPath],
+    };
+  }
+
+  return {
+    command: "bun",
+    args: ["run", "dev"],
+  };
+}
+
 function resolveDefaultWorkspacePath(): string | null {
   const candidate = process.env.REFINEX_DESKTOP_DEFAULT_WORKSPACE;
   return candidate && isDirectory(candidate) ? candidate : null;
@@ -123,6 +238,7 @@ function toTerminalSessionInfo(
   cwd: string,
   shellPath: string,
   created: boolean,
+  backlog?: string,
 ): TerminalSessionInfo {
   return {
     sessionId,
@@ -130,6 +246,7 @@ function toTerminalSessionInfo(
     shellPath,
     created,
     alive: true,
+    backlog,
   };
 }
 
@@ -139,7 +256,7 @@ function closeTerminalSession(sessionId: string) {
     return;
   }
 
-  session.process.kill("SIGTERM");
+  session.process.kill();
   terminalSessions.delete(sessionId);
 }
 
@@ -149,63 +266,63 @@ function closeAllTerminalSessions() {
   }
 }
 
-function spawnShellProcess(shellPath: string, cwd: string) {
-  if (process.platform === "darwin") {
-    return spawn("script", ["-q", "/dev/null", shellPath, "-i"], {
-      cwd,
-      env: {
-        ...process.env,
-        TERM: "xterm-256color",
-        COLORTERM: "truecolor",
-      },
-    });
-  }
+function emitTerminalChunk(sessionId: string, chunk: string) {
+  emitToRenderer("terminal:data", {
+    sessionId,
+    chunk,
+  });
+}
 
-  return spawn(shellPath, ["-i"], {
+function appendTerminalBacklog(session: TerminalSession, chunk: string) {
+  const nextBacklog = session.backlog + chunk;
+  session.backlog =
+    nextBacklog.length > TERMINAL_BACKLOG_LIMIT
+      ? nextBacklog.slice(-TERMINAL_BACKLOG_LIMIT)
+      : nextBacklog;
+}
+
+function createPtySession(
+  sessionId: string,
+  command: string,
+  args: string[],
+  cwd: string,
+  envOverrides: Record<string, string> = {},
+  onChunk?: (chunk: string) => void,
+) {
+  ensureNodePtySpawnHelperExecutable();
+  writeDesktopTerminalDebug(
+    "create-pty",
+    `session=${sessionId} command=${command} args=${JSON.stringify(args)} cwd=${cwd}`,
+  );
+
+  const ptyProcess = spawnPty(command, args, {
+    name: "xterm-256color",
+    cols: 120,
+    rows: 40,
     cwd,
     env: {
       ...process.env,
       TERM: "xterm-256color",
       COLORTERM: "truecolor",
+      TERM_PROGRAM: appName,
+      ...envOverrides,
     },
   });
-}
 
-function createTerminalSession({ sessionId, cwd }: TerminalCreateInput) {
-  const existing = terminalSessions.get(sessionId);
-  if (existing) {
-    return toTerminalSessionInfo(sessionId, existing.cwd, existing.shellPath, false);
-  }
-
-  const resolvedCwd = resolveTerminalPath(cwd);
-  const shellPath = process.env.SHELL ?? "/bin/zsh";
-  const child = spawnShellProcess(shellPath, resolvedCwd);
-
-  child.stdout.setEncoding("utf8");
-  child.stderr.setEncoding("utf8");
-
-  child.stdout.on("data", (chunk: string) => {
-    emitToRenderer("terminal:data", {
-      sessionId,
-      chunk,
-    });
+  ptyProcess.onData((chunk) => {
+    writeDesktopTerminalDebug(
+      "pty-data",
+      `session=${sessionId} bytes=${chunk.length} preview=${JSON.stringify(chunk.slice(0, 160))}`,
+    );
+    onChunk?.(chunk);
+    emitTerminalChunk(sessionId, chunk);
   });
 
-  child.stderr.on("data", (chunk: string) => {
-    emitToRenderer("terminal:data", {
-      sessionId,
-      chunk,
-    });
-  });
-
-  child.once("error", (error) => {
-    emitToRenderer("terminal:data", {
-      sessionId,
-      chunk: `\r\n[terminal bootstrap failed] ${error.message}\r\n`,
-    });
-  });
-
-  child.once("close", (exitCode) => {
+  ptyProcess.onExit(({ exitCode }) => {
+    writeDesktopTerminalDebug(
+      "pty-exit",
+      `session=${sessionId} exitCode=${exitCode}`,
+    );
     terminalSessions.delete(sessionId);
     emitToRenderer("terminal:exit", {
       sessionId,
@@ -213,12 +330,83 @@ function createTerminalSession({ sessionId, cwd }: TerminalCreateInput) {
     });
   });
 
-  terminalSessions.set(sessionId, {
+  return ptyProcess;
+}
+
+function createTerminalSession({
+  sessionId,
+  cwd,
+  profile = "shell",
+}: TerminalCreateInput) {
+  writeDesktopTerminalDebug(
+    "create-session",
+    `session=${sessionId} profile=${profile} cwd=${cwd ?? ""}`,
+  );
+  const existing = terminalSessions.get(sessionId);
+  if (existing) {
+    writeDesktopTerminalDebug(
+      "create-session",
+      `session=${sessionId} reused backlog=${existing.backlog.length}`,
+    );
+    return toTerminalSessionInfo(
+      sessionId,
+      existing.cwd,
+      existing.shellPath,
+      false,
+      existing.backlog,
+    );
+  }
+
+  const resolvedCwd = resolveTerminalPath(cwd);
+  const shellPath = process.env.SHELL ?? "/bin/zsh";
+  if (profile === "thread-tui") {
+    const launchSpec = resolveThreadTuiLaunchSpec();
+    const session: TerminalSession = {
+      id: sessionId,
+      cwd: resolvedCwd,
+      shellPath: launchSpec.command,
+      profile,
+      process: null as unknown as IPty,
+      backlog: "",
+    };
+    const ptyProcess = createPtySession(
+      sessionId,
+      launchSpec.command,
+      launchSpec.args,
+      resolvedCwd,
+      getThreadTuiEnvOverrides(),
+      (chunk) => {
+        appendTerminalBacklog(session, chunk);
+      },
+    );
+    session.process = ptyProcess;
+
+    terminalSessions.set(sessionId, session);
+
+    return toTerminalSessionInfo(sessionId, resolvedCwd, launchSpec.command, true);
+  }
+
+  const session: TerminalSession = {
     id: sessionId,
     cwd: resolvedCwd,
     shellPath,
-    process: child,
-  });
+    profile,
+    process: null as unknown as IPty,
+    backlog: "",
+  };
+  const ptyProcess = createPtySession(
+    sessionId,
+    shellPath,
+    ["-i"],
+    resolvedCwd,
+    {},
+    (chunk) => {
+      appendTerminalBacklog(session, chunk);
+    },
+  );
+  session.process = ptyProcess;
+
+  terminalSessions.set(sessionId, session);
 
   return toTerminalSessionInfo(sessionId, resolvedCwd, shellPath, true);
 }
@@ -682,10 +870,18 @@ function registerIpcHandlers() {
   ipcMain.handle("terminal:write", (_event, payload: { sessionId: string; data: string }) => {
     const session = terminalSessions.get(payload.sessionId);
     if (!session) {
+      writeDesktopTerminalDebug(
+        "terminal-write",
+        `session=${payload.sessionId} dropped bytes=${payload.data.length}`,
+      );
       return;
     }
 
-    session.process.stdin.write(payload.data);
+    writeDesktopTerminalDebug(
+      "terminal-write",
+      `session=${payload.sessionId} bytes=${payload.data.length} preview=${JSON.stringify(payload.data.slice(0, 160))}`,
+    );
+    session.process.write(payload.data);
   });
 
   ipcMain.handle("terminal:close", (_event, sessionId: string) => {
