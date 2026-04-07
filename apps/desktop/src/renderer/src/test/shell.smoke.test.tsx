@@ -434,8 +434,10 @@ describe("desktop shell", () => {
     const suggestionList = await screen.findByRole("listbox", {
       name: "Slash suggestions",
     });
+    expect(within(suggestionList).getByText("初始化")).toBeInTheDocument();
     expect(within(suggestionList).getByText("代码审查")).toBeInTheDocument();
     expect(within(suggestionList).getByText("技能")).toBeInTheDocument();
+    expect(within(suggestionList).getByText("Init")).toBeInTheDocument();
     expect(within(suggestionList).getByText("Review")).toBeInTheDocument();
     expect(within(suggestionList).getByText("PR Comments")).toBeInTheDocument();
     expect(
@@ -443,6 +445,12 @@ describe("desktop shell", () => {
     ).toBeInTheDocument();
     expect(within(suggestionList).getByRole("option", { name: /Harness Feat/i })).toBeInTheDocument();
     expect(within(suggestionList).getByRole("option", { name: /Tech Writing/i })).toBeInTheDocument();
+
+    fireEvent.change(composer, {
+      target: {
+        value: "/rev",
+      },
+    });
 
     fireEvent.keyDown(composer, {
       key: "Enter",
@@ -475,6 +483,93 @@ describe("desktop shell", () => {
       expect(window.desktopApp.writeTerminal).toHaveBeenCalledWith(
         "thread-tui:thread-2",
         "/review 42\r",
+      );
+    });
+  });
+
+  it("supports /init as a built-in prompt command and routes it into thread tui", async () => {
+    vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue({
+      ...emptySidebarState,
+      storageRoot:
+        "/Users/test/Library/Application Support/RWork/sidebar-state",
+      activeWorktreeId: "alpha",
+      activeSessionId: "thread-2",
+      worktrees: [
+        {
+          id: "alpha",
+          label: "alpha",
+          sourcePath: "/Users/test/projects/alpha",
+          worktreePath: "/Users/test/projects/alpha",
+          gitRoot: "/Users/test/projects/alpha",
+          branch: "main",
+          isGitRepository: true,
+          storagePath:
+            "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha",
+          createdAt: "2026-04-06T00:00:00.000Z",
+          updatedAt: "2026-04-06T00:00:00.000Z",
+          lastOpenedAt: "2026-04-06T00:00:00.000Z",
+          lastSessionId: "thread-2",
+          sessions: [
+            {
+              id: "thread-2",
+              worktreeId: "alpha",
+              title: "新线程",
+              status: "idle",
+              createdAt: "2026-04-06T00:00:00.000Z",
+              updatedAt: "2026-04-06T00:00:00.000Z",
+              lastOpenedAt: "2026-04-06T00:00:00.000Z",
+              storagePath:
+                "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha/sessions/thread-2.json",
+            },
+          ],
+        },
+      ],
+    });
+    vi.mocked(window.desktopApp.getSkillsSnapshot).mockResolvedValue({
+      activeWorktreePath: "/Users/test/projects/alpha",
+      generatedAt: "2026-04-07T00:00:00.000Z",
+      skills: [],
+    });
+
+    render(<App />);
+
+    const composer = await screen.findByLabelText("新线程");
+    vi.mocked(window.desktopApp.writeTerminal).mockClear();
+    fireEvent.change(composer, {
+      target: {
+        value: "/ini",
+      },
+    });
+
+    const suggestionList = await screen.findByRole("listbox", {
+      name: "Slash suggestions",
+    });
+    expect(within(suggestionList).getByText("初始化")).toBeInTheDocument();
+    expect(within(suggestionList).getByRole("option", { name: /Init/i })).toBeInTheDocument();
+
+    fireEvent.keyDown(composer, {
+      key: "Enter",
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByLabelText("已选择初始化命令 Init"),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText("直接发送即可；CLI 会先扫描代码库，并通过提问逐步确定 AGENTS、skills 和 hooks 的产出范围。"),
+    ).toBeInTheDocument();
+    expect(composer).toHaveAttribute(
+      "placeholder",
+      "直接发送，开始扫描代码库并初始化 AGENTS / skills / hooks",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "发送到当前线程 TUI" }));
+
+    await waitFor(() => {
+      expect(window.desktopApp.writeTerminal).toHaveBeenCalledWith(
+        "thread-tui:thread-2",
+        "/init\r",
       );
     });
   });

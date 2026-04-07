@@ -126,7 +126,7 @@ function getProviderDefaults(
   };
 }
 
-type SlashSuggestionKind = "skill" | "review-command" | "status-card";
+type SlashSuggestionKind = "skill" | "prompt-command" | "status-card";
 
 interface SlashSuggestion {
   id: string;
@@ -137,6 +137,8 @@ interface SlashSuggestion {
   kind: SlashSuggestionKind;
   helperText?: string;
   placeholderText?: string;
+  selectionLabel?: string;
+  icon?: "search" | "sparkles";
 }
 
 interface SlashSuggestionSection {
@@ -156,6 +158,21 @@ interface SlashPreviewCardData {
   }>;
 }
 
+const initCommandSuggestions: SlashSuggestion[] = [
+  {
+    id: "builtin:init",
+    label: "Init",
+    description: "初始化 AGENTS.md 与代码库文档化入口。",
+    commandName: "init",
+    insertValue: "/init",
+    kind: "prompt-command",
+    helperText: "直接发送即可；CLI 会先扫描代码库，并通过提问逐步确定 AGENTS、skills 和 hooks 的产出范围。",
+    placeholderText: "直接发送，开始扫描代码库并初始化 AGENTS / skills / hooks",
+    selectionLabel: "已选择初始化命令",
+    icon: "sparkles",
+  },
+];
+
 const reviewCommandSuggestions: SlashSuggestion[] = [
   {
     id: "builtin:review",
@@ -163,9 +180,11 @@ const reviewCommandSuggestions: SlashSuggestion[] = [
     description: "审查当前 PR 或指定 PR；留空发送时 CLI 会先列出可审查的 open PR。",
     commandName: "review",
     insertValue: "/review ",
-    kind: "review-command",
+    kind: "prompt-command",
     helperText: "输入 PR 编号；留空发送时，CLI 会先列出可审查的 open PR。",
     placeholderText: "输入 PR 编号，留空发送会先列出 open PR",
+    selectionLabel: "已选择代码审查命令",
+    icon: "search",
   },
   {
     id: "builtin:pr-comments",
@@ -173,9 +192,11 @@ const reviewCommandSuggestions: SlashSuggestion[] = [
     description: "先拉取 GitHub PR comments，再进入评论梳理与后续处理。",
     commandName: "pr-comments",
     insertValue: "/pr-comments ",
-    kind: "review-command",
+    kind: "prompt-command",
     helperText: "输入 PR 编号，先拉取这条 PR 的 comments 作为后续处理上下文。",
     placeholderText: "输入 PR 编号以拉取 GitHub PR comments",
+    selectionLabel: "已选择代码审查命令",
+    icon: "search",
   },
   {
     id: "builtin:security-review",
@@ -183,9 +204,11 @@ const reviewCommandSuggestions: SlashSuggestion[] = [
     description: "对当前分支待提交改动做高置信安全审查；通常直接发送即可。",
     commandName: "security-review",
     insertValue: "/security-review ",
-    kind: "review-command",
+    kind: "prompt-command",
     helperText: "通常直接发送即可，CLI 会基于当前分支改动做安全审查。",
     placeholderText: "直接回车，开始审查当前分支待提交改动",
+    selectionLabel: "已选择代码审查命令",
+    icon: "search",
   },
 ];
 
@@ -408,6 +431,32 @@ function buildReviewCommandSuggestions(query: string): SlashSuggestion[] {
     .map((entry) => entry.suggestion);
 }
 
+function buildInitCommandSuggestions(query: string): SlashSuggestion[] {
+  if (query.length === 0) {
+    return initCommandSuggestions;
+  }
+
+  return initCommandSuggestions
+    .map((suggestion, index) => ({
+      index,
+      score: getSlashSuggestionScore(query, {
+        name: suggestion.commandName,
+        label: suggestion.label,
+        description: suggestion.description,
+      }),
+      suggestion,
+    }))
+    .filter((entry) => Number.isFinite(entry.score))
+    .sort((left, right) => {
+      if (left.score !== right.score) {
+        return left.score - right.score;
+      }
+
+      return left.index - right.index;
+    })
+    .map((entry) => entry.suggestion);
+}
+
 function buildStatusCommandSuggestions(query: string): SlashSuggestion[] {
   if (query.length === 0) {
     return statusCommandSuggestions;
@@ -444,9 +493,18 @@ function buildSlashSuggestionSections(
 
   const query = value.slice(1).trim().toLowerCase();
   const sections: SlashSuggestionSection[] = [];
+  const initSuggestions = buildInitCommandSuggestions(query);
   const reviewSuggestions = buildReviewCommandSuggestions(query);
   const statusSuggestions = buildStatusCommandSuggestions(query);
   const skillSuggestions = buildSlashSkillSuggestions(query, snapshot);
+
+  if (initSuggestions.length > 0) {
+    sections.push({
+      id: "init",
+      title: "初始化",
+      suggestions: initSuggestions,
+    });
+  }
 
   if (reviewSuggestions.length > 0) {
     sections.push({
@@ -594,7 +652,7 @@ function getSlashSuggestionIconClassName(
       : "bg-[rgba(13,148,136,0.12)] text-[rgb(15,118,110)] dark:bg-[rgba(45,212,191,0.1)] dark:text-[rgb(94,234,212)]";
   }
 
-  if (suggestion.kind === "review-command") {
+  if (suggestion.kind === "prompt-command") {
     return selected
       ? "bg-[rgba(14,165,233,0.18)] text-[rgb(3,105,161)] dark:bg-[rgba(56,189,248,0.16)] dark:text-[rgb(125,211,252)]"
       : "bg-[rgba(14,165,233,0.12)] text-[rgb(14,116,144)] dark:bg-[rgba(56,189,248,0.12)] dark:text-[rgb(103,232,249)]";
@@ -618,7 +676,11 @@ function renderSlashSuggestionIcon(suggestion: SlashSuggestion) {
     return <Gauge className="h-3.5 w-3.5" aria-hidden="true" />;
   }
 
-  if (suggestion.kind === "review-command") {
+  if (suggestion.kind === "prompt-command") {
+    if (suggestion.icon === "sparkles") {
+      return <Zap className="h-3.5 w-3.5" aria-hidden="true" />;
+    }
+
     return <Search className="h-3.5 w-3.5" aria-hidden="true" />;
   }
 
@@ -904,7 +966,7 @@ export function WorkspaceComposer({
       setSelectedStatusPreview(suggestion);
       setSelectedSlashCommand(null);
       setSelectedSkillPills([]);
-    } else if (suggestion.kind === "review-command") {
+    } else if (suggestion.kind === "prompt-command") {
       setSelectedStatusPreview(null);
       setSelectedSlashCommand(suggestion);
       setSelectedSkillPills([]);
@@ -1243,9 +1305,13 @@ export function WorkspaceComposer({
               <div
                 className="inline-flex h-6 shrink-0 items-center gap-1 self-start rounded-full bg-[linear-gradient(180deg,rgba(219,234,254,0.96)_0%,rgba(224,242,254,0.84)_100%)] px-2.5 py-0 text-[length:var(--ui-font-size-lg)] leading-6 text-[rgb(3,105,161)] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:bg-[linear-gradient(180deg,rgba(8,47,73,0.78)_0%,rgba(14,116,144,0.28)_100%)] dark:text-[rgb(125,211,252)]"
                 data-selected-slash-command={selectedSlashCommand.commandName}
-                aria-label={`已选择代码审查命令 ${selectedSlashCommand.label}`}
+                aria-label={`${selectedSlashCommand.selectionLabel ?? "已选择斜杠命令"} ${selectedSlashCommand.label}`}
               >
-                <Search className="h-3 w-3 shrink-0" aria-hidden="true" />
+                {selectedSlashCommand.icon === "sparkles" ? (
+                  <Zap className="h-3 w-3 shrink-0" aria-hidden="true" />
+                ) : (
+                  <Search className="h-3 w-3 shrink-0" aria-hidden="true" />
+                )}
                 <span className="truncate font-medium">
                   {selectedSlashCommand.label}
                 </span>
@@ -1294,7 +1360,11 @@ export function WorkspaceComposer({
           {selectedSlashCommand?.helperText ? (
             <div className="flex items-center gap-2 px-1 pb-1 pt-1 text-[11px] text-[var(--color-muted)]">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[rgba(14,165,233,0.1)] text-[rgb(14,116,144)] dark:bg-[rgba(56,189,248,0.12)] dark:text-[rgb(125,211,252)]">
-                <Search className="h-3 w-3" aria-hidden="true" />
+                {selectedSlashCommand.icon === "sparkles" ? (
+                  <Zap className="h-3 w-3" aria-hidden="true" />
+                ) : (
+                  <Search className="h-3 w-3" aria-hidden="true" />
+                )}
               </span>
               <span className="truncate">{selectedSlashCommand.helperText}</span>
             </div>
