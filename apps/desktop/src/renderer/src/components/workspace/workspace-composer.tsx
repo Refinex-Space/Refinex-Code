@@ -7,6 +7,7 @@ import {
   MicOff,
   Package,
   Plus,
+  Search,
   Zap,
 } from "lucide-react";
 import {
@@ -38,7 +39,7 @@ import {
 } from "../../../../shared/provider-settings";
 
 const INPUT_MAX_HEIGHT = 152;
-const SKILL_SUGGESTIONS_LIST_ID = "workspace-composer-skill-suggestions";
+const SLASH_SUGGESTIONS_LIST_ID = "workspace-composer-slash-suggestions";
 const claudeLogoUrl = new URL(
   "../../../../../resources/provider-logos/claude.svg",
   import.meta.url,
@@ -116,16 +117,110 @@ function getProviderDefaults(
   };
 }
 
-interface SlashSkillSuggestion {
+type SlashSuggestionKind = "skill" | "review-command";
+
+interface SlashSuggestion {
   id: string;
   label: string;
   description: string;
   commandName: string;
   insertValue: string;
+  kind: SlashSuggestionKind;
+  helperText?: string;
+  placeholderText?: string;
 }
 
-function shouldShowSlashSkillSuggestions(value: string) {
+interface SlashSuggestionSection {
+  id: string;
+  title: string;
+  suggestions: SlashSuggestion[];
+}
+
+const reviewCommandSuggestions: SlashSuggestion[] = [
+  {
+    id: "builtin:review",
+    label: "Review",
+    description: "审查当前 PR 或指定 PR；留空发送时 CLI 会先列出可审查的 open PR。",
+    commandName: "review",
+    insertValue: "/review ",
+    kind: "review-command",
+    helperText: "输入 PR 编号；留空发送时，CLI 会先列出可审查的 open PR。",
+    placeholderText: "输入 PR 编号，留空发送会先列出 open PR",
+  },
+  {
+    id: "builtin:pr-comments",
+    label: "PR Comments",
+    description: "先拉取 GitHub PR comments，再进入评论梳理与后续处理。",
+    commandName: "pr-comments",
+    insertValue: "/pr-comments ",
+    kind: "review-command",
+    helperText: "输入 PR 编号，先拉取这条 PR 的 comments 作为后续处理上下文。",
+    placeholderText: "输入 PR 编号以拉取 GitHub PR comments",
+  },
+  {
+    id: "builtin:security-review",
+    label: "Security Review",
+    description: "对当前分支待提交改动做高置信安全审查；通常直接发送即可。",
+    commandName: "security-review",
+    insertValue: "/security-review ",
+    kind: "review-command",
+    helperText: "通常直接发送即可，CLI 会基于当前分支改动做安全审查。",
+    placeholderText: "直接回车，开始审查当前分支待提交改动",
+  },
+];
+
+function shouldShowSlashSuggestions(value: string) {
   return value.startsWith("/") && !value.includes(" ");
+}
+
+function normalizeSlashSuggestionDescription(description: string) {
+  return description.replace(/\s+/g, " ").trim();
+}
+
+function getSlashSuggestionScore(
+  query: string,
+  options: {
+    name: string;
+    label: string;
+    description: string;
+  },
+) {
+  const normalizedName = options.name.toLowerCase();
+  const normalizedLabel = options.label.toLowerCase();
+  const normalizedDescription = options.description.toLowerCase();
+  const parts = [...new Set([
+    ...normalizedName.split(/[:_-\s]+/g),
+    ...normalizedLabel.split(/[:_-\s]+/g),
+  ])].filter(Boolean);
+
+  if (normalizedName === query || normalizedLabel === query) {
+    return 0;
+  }
+
+  if (normalizedName.startsWith(query)) {
+    return 1;
+  }
+
+  if (normalizedLabel.startsWith(query)) {
+    return 2;
+  }
+
+  if (parts.some((part) => part.startsWith(query))) {
+    return 3;
+  }
+
+  if (
+    normalizedName.includes(query) ||
+    normalizedLabel.includes(query)
+  ) {
+    return 4;
+  }
+
+  if (normalizedDescription.includes(query)) {
+    return 5;
+  }
+
+  return Number.POSITIVE_INFINITY;
 }
 
 function formatSkillSuggestionLabel(skill: SkillRecord) {
@@ -140,23 +235,22 @@ function formatSkillSuggestionLabel(skill: SkillRecord) {
 }
 
 function buildSlashSkillSuggestions(
-  value: string,
+  query: string,
   snapshot: SkillSnapshot | null,
-): SlashSkillSuggestion[] {
-  if (!snapshot || !shouldShowSlashSkillSuggestions(value)) {
+): SlashSuggestion[] {
+  if (!snapshot) {
     return [];
   }
-
-  const query = value.slice(1).trim().toLowerCase();
   const invocableSkills = snapshot.skills.filter((skill) => skill.userInvocable);
 
   if (query.length === 0) {
     return invocableSkills.map((skill) => ({
       id: skill.id,
       label: formatSkillSuggestionLabel(skill),
-      description: skill.description.replace(/\s+/g, " ").trim(),
+      description: normalizeSlashSuggestionDescription(skill.description),
       commandName: skill.name,
       insertValue: `/${skill.name} `,
+      kind: "skill",
     }));
   }
 
@@ -199,9 +293,10 @@ function buildSlashSkillSuggestions(
         suggestion: {
           id: skill.id,
           label: formatSkillSuggestionLabel(skill),
-          description: skill.description.replace(/\s+/g, " ").trim(),
+          description: normalizeSlashSuggestionDescription(skill.description),
           commandName: skill.name,
           insertValue: `/${skill.name} `,
+          kind: "skill",
         },
       };
     })
@@ -211,7 +306,7 @@ function buildSlashSkillSuggestions(
       ): entry is {
         index: number;
         score: number;
-        suggestion: SlashSkillSuggestion;
+        suggestion: SlashSuggestion;
       } => entry !== null,
     )
     .sort((left, right) => {
@@ -222,6 +317,64 @@ function buildSlashSkillSuggestions(
       return left.index - right.index;
     })
     .map((entry) => entry.suggestion);
+}
+
+function buildReviewCommandSuggestions(query: string): SlashSuggestion[] {
+  if (query.length === 0) {
+    return reviewCommandSuggestions;
+  }
+
+  return reviewCommandSuggestions
+    .map((suggestion, index) => ({
+      index,
+      score: getSlashSuggestionScore(query, {
+        name: suggestion.commandName,
+        label: suggestion.label,
+        description: suggestion.description,
+      }),
+      suggestion,
+    }))
+    .filter((entry) => Number.isFinite(entry.score))
+    .sort((left, right) => {
+      if (left.score !== right.score) {
+        return left.score - right.score;
+      }
+
+      return left.index - right.index;
+    })
+    .map((entry) => entry.suggestion);
+}
+
+function buildSlashSuggestionSections(
+  value: string,
+  snapshot: SkillSnapshot | null,
+): SlashSuggestionSection[] {
+  if (!shouldShowSlashSuggestions(value)) {
+    return [];
+  }
+
+  const query = value.slice(1).trim().toLowerCase();
+  const sections: SlashSuggestionSection[] = [];
+  const reviewSuggestions = buildReviewCommandSuggestions(query);
+  const skillSuggestions = buildSlashSkillSuggestions(query, snapshot);
+
+  if (reviewSuggestions.length > 0) {
+    sections.push({
+      id: "review",
+      title: "代码审查",
+      suggestions: reviewSuggestions,
+    });
+  }
+
+  if (skillSuggestions.length > 0) {
+    sections.push({
+      id: "skills",
+      title: "技能",
+      suggestions: skillSuggestions,
+    });
+  }
+
+  return sections;
 }
 
 export function WorkspaceComposer({
@@ -236,14 +389,18 @@ export function WorkspaceComposer({
   const [providerSnapshot, setProviderSnapshot] =
     useState<DesktopProviderSettingsSnapshot | null>(null);
   const [skillSnapshot, setSkillSnapshot] = useState<SkillSnapshot | null>(null);
+  const [selectedSlashCommand, setSelectedSlashCommand] =
+    useState<SlashSuggestion | null>(null);
   const [selectedSkillPills, setSelectedSkillPills] = useState<
-    SlashSkillSuggestion[]
+    SlashSuggestion[]
   >([]);
-  const [selectedSkillSuggestionIndex, setSelectedSkillSuggestionIndex] =
+  const [selectedSlashSuggestionIndex, setSelectedSlashSuggestionIndex] =
     useState(0);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const skillSuggestionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const composerValue = `${selectedSkillPills.map((skill) => skill.insertValue).join("")}${value}`;
+  const slashSuggestionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const composerValue = selectedSlashCommand
+    ? `${selectedSlashCommand.insertValue}${value}`
+    : `${selectedSkillPills.map((skill) => skill.insertValue).join("")}${value}`;
   const hasDraft = composerValue.trim().length > 0;
   const canSend = hasActiveSession && hasDraft;
   const canUseDictation = hasActiveSession;
@@ -360,17 +517,26 @@ export function WorkspaceComposer({
   const effortButtonLabel = effortSupported
     ? reasoningLabels[composerEffort]
     : "N/A";
-  const skillSuggestions = useMemo(
-    () => buildSlashSkillSuggestions(value, skillSnapshot),
+  const slashSuggestionSections = useMemo(
+    () => buildSlashSuggestionSections(value, skillSnapshot),
     [skillSnapshot, value],
   );
-  const showSkillSuggestions = hasActiveSession && skillSuggestions.length > 0;
+  const slashSuggestions = useMemo(
+    () =>
+      slashSuggestionSections.flatMap((section) => section.suggestions),
+    [slashSuggestionSections],
+  );
+  const showSlashSuggestions =
+    hasActiveSession &&
+    !selectedSlashCommand &&
+    slashSuggestions.length > 0;
 
-  const placeholder = !hasWorktree
+  const defaultPlaceholder = !hasWorktree
     ? "先打开一个项目，再从左侧创建或选择线程"
     : !hasActiveSession
       ? "咨询 RWork 任何问题，@ 添加文件，/ 唤出命令，$ 唤出 Skills"
       : "描述下一步要做的事，Enter 发送，Shift+Enter 换行";
+  const placeholder = selectedSlashCommand?.placeholderText ?? defaultPlaceholder;
 
   const handleInput = () => {
     const element = textareaRef.current;
@@ -406,6 +572,7 @@ export function WorkspaceComposer({
         profile: "thread-tui",
       });
       await window.desktopApp.writeTerminal(terminalSessionId, normalizedInput);
+      setSelectedSlashCommand(null);
       setSelectedSkillPills([]);
       applyValue("");
     } catch (error) {
@@ -420,9 +587,16 @@ export function WorkspaceComposer({
     });
   };
 
-  const applySkillSuggestion = (suggestion: SlashSkillSuggestion) => {
-    setSelectedSkillPills((current) => [...current, suggestion]);
-    setSelectedSkillSuggestionIndex(0);
+  const applySlashSuggestion = (suggestion: SlashSuggestion) => {
+    if (suggestion.kind === "review-command") {
+      setSelectedSlashCommand(suggestion);
+      setSelectedSkillPills([]);
+    } else {
+      setSelectedSlashCommand(null);
+      setSelectedSkillPills((current) => [...current, suggestion]);
+    }
+
+    setSelectedSlashSuggestionIndex(0);
     applyValue("");
     requestAnimationFrame(() => {
       textareaRef.current?.focus();
@@ -453,35 +627,46 @@ export function WorkspaceComposer({
   });
 
   useEffect(() => {
-    if (!showSkillSuggestions) {
-      setSelectedSkillSuggestionIndex(0);
+    if (!showSlashSuggestions) {
+      setSelectedSlashSuggestionIndex(0);
       return;
     }
 
-    setSelectedSkillSuggestionIndex((current) => {
-      if (current >= skillSuggestions.length) {
+    setSelectedSlashSuggestionIndex((current) => {
+      if (current >= slashSuggestions.length) {
         return 0;
       }
 
       return current;
     });
-  }, [showSkillSuggestions, skillSuggestions.length, value]);
+  }, [showSlashSuggestions, slashSuggestions.length, value]);
 
   useEffect(() => {
-    if (!showSkillSuggestions) {
-      skillSuggestionRefs.current = [];
+    if (!showSlashSuggestions) {
+      slashSuggestionRefs.current = [];
       return;
     }
 
-    const activeSuggestion = skillSuggestionRefs.current[selectedSkillSuggestionIndex];
+    const activeSuggestion =
+      slashSuggestionRefs.current[selectedSlashSuggestionIndex];
     if (typeof activeSuggestion?.scrollIntoView === "function") {
       activeSuggestion.scrollIntoView({
         block: "nearest",
       });
     }
-  }, [selectedSkillSuggestionIndex, showSkillSuggestions]);
+  }, [selectedSlashSuggestionIndex, showSlashSuggestions]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (
+      selectedSlashCommand &&
+      value.length === 0 &&
+      (event.key === "Backspace" || event.key === "Delete")
+    ) {
+      event.preventDefault();
+      setSelectedSlashCommand(null);
+      return;
+    }
+
     if (
       selectedSkillPills.length > 0 &&
       value.length === 0 &&
@@ -492,27 +677,27 @@ export function WorkspaceComposer({
       return;
     }
 
-    if (showSkillSuggestions && event.key === "ArrowDown") {
+    if (showSlashSuggestions && event.key === "ArrowDown") {
       event.preventDefault();
-      setSelectedSkillSuggestionIndex((current) =>
-        current >= skillSuggestions.length - 1 ? 0 : current + 1,
+      setSelectedSlashSuggestionIndex((current) =>
+        current >= slashSuggestions.length - 1 ? 0 : current + 1,
       );
       return;
     }
 
-    if (showSkillSuggestions && event.key === "ArrowUp") {
+    if (showSlashSuggestions && event.key === "ArrowUp") {
       event.preventDefault();
-      setSelectedSkillSuggestionIndex((current) =>
-        current <= 0 ? skillSuggestions.length - 1 : current - 1,
+      setSelectedSlashSuggestionIndex((current) =>
+        current <= 0 ? slashSuggestions.length - 1 : current - 1,
       );
       return;
     }
 
-    if (showSkillSuggestions && event.key === "Enter" && !event.shiftKey) {
+    if (showSlashSuggestions && event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      const selectedSkill = skillSuggestions[selectedSkillSuggestionIndex];
-      if (selectedSkill) {
-        applySkillSuggestion(selectedSkill);
+      const selectedSuggestion = slashSuggestions[selectedSlashSuggestionIndex];
+      if (selectedSuggestion) {
+        applySlashSuggestion(selectedSuggestion);
       }
       return;
     }
@@ -558,67 +743,99 @@ export function WorkspaceComposer({
     >
       <div className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-panel)] p-2 backdrop-blur-xl">
         <div className="relative px-3 pt-1">
-          {showSkillSuggestions ? (
+          {showSlashSuggestions ? (
             <div
-              id={SKILL_SUGGESTIONS_LIST_ID}
+              id={SLASH_SUGGESTIONS_LIST_ID}
               role="listbox"
-              aria-label="Skill suggestions"
+              aria-label="Slash suggestions"
               className="absolute inset-x-3 bottom-full z-20 mb-2 max-h-56 overflow-y-auto rounded-[18px] border border-[var(--color-border)] bg-[var(--color-panel)] p-2 shadow-[var(--shadow-panel)] backdrop-blur-xl"
             >
-              <div className="px-2 pb-2 pt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--color-muted)]">
-                技能
-              </div>
-              <div className="space-y-1">
-                {skillSuggestions.map((suggestion, index) => {
-                  const selected = index === selectedSkillSuggestionIndex;
+              {(() => {
+                let suggestionOffset = 0;
+
+                return slashSuggestionSections.map((section) => {
+                  const sectionStartIndex = suggestionOffset;
+                  suggestionOffset += section.suggestions.length;
+
                   return (
-                    <button
-                      key={suggestion.id}
-                      id={`${SKILL_SUGGESTIONS_LIST_ID}-${suggestion.id}`}
-                      ref={(node) => {
-                        skillSuggestionRefs.current[index] = node;
-                      }}
-                      type="button"
-                      role="option"
-                      aria-selected={selected}
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                      }}
-                      onMouseEnter={() => {
-                        setSelectedSkillSuggestionIndex(index);
-                      }}
-                      onClick={() => {
-                        applySkillSuggestion(suggestion);
-                      }}
-                      className={cn(
-                        "flex w-full items-center gap-3 rounded-[14px] px-3 py-2 text-left transition-colors duration-150",
-                        selected
-                          ? "bg-[rgba(148,163,184,0.14)]"
-                          : "hover:bg-[rgba(148,163,184,0.06)]",
-                      )}
-                    >
-                      <span className="flex min-w-0 max-w-[44%] shrink items-center gap-2">
-                        <span
-                          className={cn(
-                            "flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
-                            selected
-                              ? "bg-[rgba(99,102,241,0.18)] text-[rgb(79,70,229)]"
-                              : "bg-[rgba(148,163,184,0.12)] text-[var(--color-muted)]",
-                          )}
-                        >
-                          <Package className="h-3.5 w-3.5" aria-hidden="true" />
-                        </span>
-                        <span className="truncate text-[13px] font-medium text-[var(--color-fg)]">
-                          {suggestion.label}
-                        </span>
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-[11px] leading-5 text-[var(--color-muted)]">
-                        {suggestion.description}
-                      </span>
-                    </button>
+                    <div key={section.id} className="space-y-1">
+                      <div className="px-2 pb-2 pt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--color-muted)]">
+                        {section.title}
+                      </div>
+                      <div className="space-y-1">
+                        {section.suggestions.map((suggestion, index) => {
+                          const flatIndex = sectionStartIndex + index;
+                          const selected =
+                            flatIndex === selectedSlashSuggestionIndex;
+                          const isReviewCommand =
+                            suggestion.kind === "review-command";
+
+                          return (
+                            <button
+                              key={suggestion.id}
+                              id={`${SLASH_SUGGESTIONS_LIST_ID}-${suggestion.id}`}
+                              ref={(node) => {
+                                slashSuggestionRefs.current[flatIndex] = node;
+                              }}
+                              type="button"
+                              role="option"
+                              aria-selected={selected}
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                              }}
+                              onMouseEnter={() => {
+                                setSelectedSlashSuggestionIndex(flatIndex);
+                              }}
+                              onClick={() => {
+                                applySlashSuggestion(suggestion);
+                              }}
+                              className={cn(
+                                "flex w-full items-center gap-3 rounded-[14px] px-3 py-2 text-left transition-colors duration-150",
+                                selected
+                                  ? "bg-[rgba(148,163,184,0.14)]"
+                                  : "hover:bg-[rgba(148,163,184,0.06)]",
+                              )}
+                            >
+                              <span className="flex min-w-0 max-w-[44%] shrink items-center gap-2">
+                                <span
+                                  className={cn(
+                                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+                                    selected && isReviewCommand
+                                      ? "bg-[rgba(14,165,233,0.18)] text-[rgb(3,105,161)] dark:bg-[rgba(56,189,248,0.16)] dark:text-[rgb(125,211,252)]"
+                                      : selected
+                                        ? "bg-[rgba(99,102,241,0.18)] text-[rgb(79,70,229)]"
+                                        : isReviewCommand
+                                          ? "bg-[rgba(14,165,233,0.12)] text-[rgb(14,116,144)] dark:bg-[rgba(56,189,248,0.12)] dark:text-[rgb(103,232,249)]"
+                                          : "bg-[rgba(148,163,184,0.12)] text-[var(--color-muted)]",
+                                  )}
+                                >
+                                  {isReviewCommand ? (
+                                    <Search
+                                      className="h-3.5 w-3.5"
+                                      aria-hidden="true"
+                                    />
+                                  ) : (
+                                    <Package
+                                      className="h-3.5 w-3.5"
+                                      aria-hidden="true"
+                                    />
+                                  )}
+                                </span>
+                                <span className="truncate text-[13px] font-medium text-[var(--color-fg)]">
+                                  {suggestion.label}
+                                </span>
+                              </span>
+                              <span className="min-w-0 flex-1 truncate text-[11px] leading-5 text-[var(--color-muted)]">
+                                {suggestion.description}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
-                })}
-              </div>
+                });
+              })()}
             </div>
           ) : null}
           <div
@@ -627,6 +844,18 @@ export function WorkspaceComposer({
               textareaRef.current?.focus();
             }}
           >
+            {selectedSlashCommand ? (
+              <div
+                className="inline-flex h-6 shrink-0 items-center gap-1 self-start rounded-full bg-[linear-gradient(180deg,rgba(219,234,254,0.96)_0%,rgba(224,242,254,0.84)_100%)] px-2.5 py-0 text-[length:var(--ui-font-size-lg)] leading-6 text-[rgb(3,105,161)] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:bg-[linear-gradient(180deg,rgba(8,47,73,0.78)_0%,rgba(14,116,144,0.28)_100%)] dark:text-[rgb(125,211,252)]"
+                data-selected-slash-command={selectedSlashCommand.commandName}
+                aria-label={`已选择代码审查命令 ${selectedSlashCommand.label}`}
+              >
+                <Search className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span className="truncate font-medium">
+                  {selectedSlashCommand.label}
+                </span>
+              </div>
+            ) : null}
             {selectedSkillPills.map((skill, index) => (
               <div
                 key={`${skill.id}-${index}`}
@@ -646,25 +875,35 @@ export function WorkspaceComposer({
               onInput={handleInput}
               onKeyDown={handleKeyDown}
               placeholder={placeholder}
-              disabled={!hasActiveSession}
-              aria-label={activeSessionTitle ?? "Session composer"}
-              aria-controls={
-                showSkillSuggestions ? SKILL_SUGGESTIONS_LIST_ID : undefined
-              }
-              aria-expanded={showSkillSuggestions}
+                disabled={!hasActiveSession}
+                aria-label={activeSessionTitle ?? "Session composer"}
+                aria-controls={
+                  showSlashSuggestions
+                    ? SLASH_SUGGESTIONS_LIST_ID
+                    : undefined
+                }
+              aria-expanded={showSlashSuggestions}
               aria-activedescendant={
-                showSkillSuggestions
-                  ? `${SKILL_SUGGESTIONS_LIST_ID}-${skillSuggestions[selectedSkillSuggestionIndex]?.id ?? ""}`
+                showSlashSuggestions
+                  ? `${SLASH_SUGGESTIONS_LIST_ID}-${slashSuggestions[selectedSlashSuggestionIndex]?.id ?? ""}`
                   : undefined
               }
               className={cn(
                 "max-h-[152px] resize-none overflow-y-auto bg-transparent text-[length:var(--ui-font-size-lg)] leading-6 text-[var(--color-fg)] outline-none placeholder:text-[var(--color-muted)] disabled:cursor-not-allowed disabled:placeholder:text-[var(--color-muted)]",
-                selectedSkillPills.length > 0
+                selectedSkillPills.length > 0 || selectedSlashCommand
                   ? "min-h-[44px] min-w-[180px] flex-1 px-0 py-0"
                   : "min-h-[52px] w-full px-1 py-1",
               )}
             />
           </div>
+          {selectedSlashCommand?.helperText ? (
+            <div className="flex items-center gap-2 px-1 pb-1 pt-1 text-[11px] text-[var(--color-muted)]">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[rgba(14,165,233,0.1)] text-[rgb(14,116,144)] dark:bg-[rgba(56,189,248,0.12)] dark:text-[rgb(125,211,252)]">
+                <Search className="h-3 w-3" aria-hidden="true" />
+              </span>
+              <span className="truncate">{selectedSlashCommand.helperText}</span>
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-1.5 flex items-end justify-between gap-3 px-2 pb-1">

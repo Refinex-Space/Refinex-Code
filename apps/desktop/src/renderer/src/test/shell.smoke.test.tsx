@@ -248,7 +248,7 @@ describe("desktop shell", () => {
     );
   });
 
-  it("shows slash skill suggestions and applies a selected skill as a pill", async () => {
+  it("shows code review slash suggestions above skills and routes /review input into thread tui", async () => {
     vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue({
       ...emptySidebarState,
       storageRoot:
@@ -351,24 +351,161 @@ describe("desktop shell", () => {
     });
 
     const suggestionList = await screen.findByRole("listbox", {
-      name: "Skill suggestions",
+      name: "Slash suggestions",
     });
+    expect(within(suggestionList).getByText("代码审查")).toBeInTheDocument();
     expect(within(suggestionList).getByText("技能")).toBeInTheDocument();
+    expect(within(suggestionList).getByText("Review")).toBeInTheDocument();
+    expect(within(suggestionList).getByText("PR Comments")).toBeInTheDocument();
+    expect(
+      within(suggestionList).getByText("Security Review"),
+    ).toBeInTheDocument();
     expect(within(suggestionList).getByRole("option", { name: /Harness Feat/i })).toBeInTheDocument();
     expect(within(suggestionList).getByRole("option", { name: /Tech Writing/i })).toBeInTheDocument();
-    expect(
-      within(suggestionList).queryByRole("option", { name: /Hidden Skill/i }),
-    ).not.toBeInTheDocument();
 
     fireEvent.keyDown(composer, {
-      key: "ArrowDown",
+      key: "Enter",
     });
 
     await waitFor(() => {
       expect(
-        within(suggestionList).getByRole("option", { name: /Tech Writing/i }),
-      ).toHaveAttribute("aria-selected", "true");
+        screen.getByLabelText("已选择代码审查命令 Review"),
+      ).toBeInTheDocument();
     });
+    expect(
+      screen.getByText("输入 PR 编号；留空发送时，CLI 会先列出可审查的 open PR。"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("listbox", { name: "Slash suggestions" }),
+    ).not.toBeInTheDocument();
+    expect(composer).toHaveAttribute(
+      "placeholder",
+      "输入 PR 编号，留空发送会先列出 open PR",
+    );
+
+    fireEvent.change(composer, {
+      target: {
+        value: "42",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送到当前线程 TUI" }));
+
+    await waitFor(() => {
+      expect(window.desktopApp.writeTerminal).toHaveBeenCalledWith(
+        "thread-tui:thread-2",
+        "/review 42\r",
+      );
+    });
+  });
+
+  it("keeps slash skill suggestions selectable as pills after adding code review commands", async () => {
+    vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue({
+      ...emptySidebarState,
+      storageRoot:
+        "/Users/test/Library/Application Support/RWork/sidebar-state",
+      activeWorktreeId: "alpha",
+      activeSessionId: "thread-2",
+      worktrees: [
+        {
+          id: "alpha",
+          label: "alpha",
+          sourcePath: "/Users/test/projects/alpha",
+          worktreePath: "/Users/test/projects/alpha",
+          gitRoot: "/Users/test/projects/alpha",
+          branch: "main",
+          isGitRepository: true,
+          storagePath:
+            "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha",
+          createdAt: "2026-04-06T00:00:00.000Z",
+          updatedAt: "2026-04-06T00:00:00.000Z",
+          lastOpenedAt: "2026-04-06T00:00:00.000Z",
+          lastSessionId: "thread-2",
+          sessions: [
+            {
+              id: "thread-2",
+              worktreeId: "alpha",
+              title: "新线程",
+              status: "idle",
+              createdAt: "2026-04-06T00:00:00.000Z",
+              updatedAt: "2026-04-06T00:00:00.000Z",
+              lastOpenedAt: "2026-04-06T00:00:00.000Z",
+              storagePath:
+                "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha/sessions/thread-2.json",
+            },
+          ],
+        },
+      ],
+    });
+    vi.mocked(window.desktopApp.getSkillsSnapshot).mockResolvedValue({
+      activeWorktreePath: "/Users/test/projects/alpha",
+      generatedAt: "2026-04-07T00:00:00.000Z",
+      skills: [
+        {
+          id: "personal:harness-feat",
+          name: "harness-feat",
+          displayName: "harness-feat",
+          sourceKind: "personal",
+          sourceLabel: "Personal skills",
+          skillRoot: "/Users/test/.agents/skills/harness-feat",
+          skillMdPath: "/Users/test/.agents/skills/harness-feat/SKILL.md",
+          description: "Plan and execute features with harness discipline.",
+          userInvocable: true,
+          disableModelInvocation: false,
+          invokedBy: "User or RWork",
+          addedBy: "User",
+          lastUpdated: "2026-04-07T00:00:00.000Z",
+          tree: [],
+        },
+        {
+          id: "personal:tech-writing",
+          name: "tech-writing",
+          displayName: "tech-writing",
+          sourceKind: "personal",
+          sourceLabel: "Personal skills",
+          skillRoot: "/Users/test/.agents/skills/tech-writing",
+          skillMdPath: "/Users/test/.agents/skills/tech-writing/SKILL.md",
+          description: "Write long-form technical content for engineering work.",
+          userInvocable: true,
+          disableModelInvocation: false,
+          invokedBy: "User or RWork",
+          addedBy: "User",
+          lastUpdated: "2026-04-07T00:00:00.000Z",
+          tree: [],
+        },
+        {
+          id: "personal:hidden-skill",
+          name: "hidden-skill",
+          displayName: "hidden-skill",
+          sourceKind: "personal",
+          sourceLabel: "Personal skills",
+          skillRoot: "/Users/test/.agents/skills/hidden-skill",
+          skillMdPath: "/Users/test/.agents/skills/hidden-skill/SKILL.md",
+          description: "This skill should stay unavailable to slash input.",
+          userInvocable: false,
+          disableModelInvocation: false,
+          invokedBy: "RWork",
+          addedBy: "User",
+          lastUpdated: "2026-04-07T00:00:00.000Z",
+          tree: [],
+        },
+      ],
+    });
+
+    render(<App />);
+
+    const composer = await screen.findByLabelText("新线程");
+    fireEvent.change(composer, {
+      target: {
+        value: "/tech",
+      },
+    });
+
+    const suggestionList = await screen.findByRole("listbox", {
+      name: "Slash suggestions",
+    });
+    expect(
+      within(suggestionList).queryByRole("option", { name: /Hidden Skill/i }),
+    ).not.toBeInTheDocument();
 
     fireEvent.keyDown(composer, {
       key: "Enter",
@@ -384,17 +521,17 @@ describe("desktop shell", () => {
     expect(firstPill.parentElement).toHaveClass("items-start");
     expect(composer).toHaveClass("py-0");
     expect(
-      screen.queryByRole("listbox", { name: "Skill suggestions" }),
+      screen.queryByRole("listbox", { name: "Slash suggestions" }),
     ).not.toBeInTheDocument();
 
     fireEvent.change(composer, {
       target: {
-        value: "/",
+        value: "/har",
       },
     });
 
     const secondSuggestionList = await screen.findByRole("listbox", {
-      name: "Skill suggestions",
+      name: "Slash suggestions",
     });
     expect(
       within(secondSuggestionList).getByRole("option", { name: /Harness Feat/i }),
