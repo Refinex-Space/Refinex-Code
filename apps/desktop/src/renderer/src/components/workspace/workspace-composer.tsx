@@ -1,13 +1,17 @@
 import { DropdownMenu } from "@radix-ui/themes";
 import {
+  Activity,
   ArrowUp,
+  BarChart3,
   Brain,
   Check,
+  Gauge,
   Mic,
   MicOff,
   Package,
   Plus,
   Search,
+  X,
   Zap,
 } from "lucide-react";
 import {
@@ -23,7 +27,11 @@ import { Tooltip } from "@renderer/components/ui/tooltip";
 import { cn } from "@renderer/lib/cn";
 import { getErrorMessage } from "@renderer/lib/errors";
 import { type ThreadConversationMode, useUIStore } from "@renderer/stores/ui";
-import type { SkillRecord, SkillSnapshot } from "../../../../shared/contracts";
+import type {
+  AppInfo,
+  SkillRecord,
+  SkillSnapshot,
+} from "../../../../shared/contracts";
 import type {
   DesktopProviderId,
   DesktopProviderSettingsSnapshot,
@@ -40,6 +48,7 @@ import {
 
 const INPUT_MAX_HEIGHT = 152;
 const SLASH_SUGGESTIONS_LIST_ID = "workspace-composer-slash-suggestions";
+const SLASH_FLOATING_LAYER_POSITION_CLASS = "absolute inset-x-0 bottom-full mb-1.5";
 const claudeLogoUrl = new URL(
   "../../../../../resources/provider-logos/claude.svg",
   import.meta.url,
@@ -117,7 +126,7 @@ function getProviderDefaults(
   };
 }
 
-type SlashSuggestionKind = "skill" | "review-command";
+type SlashSuggestionKind = "skill" | "review-command" | "status-card";
 
 interface SlashSuggestion {
   id: string;
@@ -134,6 +143,17 @@ interface SlashSuggestionSection {
   id: string;
   title: string;
   suggestions: SlashSuggestion[];
+}
+
+interface SlashPreviewCardData {
+  title: string;
+  commandLabel: string;
+  accentClassName: string;
+  icon: "status" | "stats" | "usage";
+  rows: Array<{
+    label: string;
+    value: string;
+  }>;
 }
 
 const reviewCommandSuggestions: SlashSuggestion[] = [
@@ -169,12 +189,55 @@ const reviewCommandSuggestions: SlashSuggestion[] = [
   },
 ];
 
+const statusCommandSuggestions: SlashSuggestion[] = [
+  {
+    id: "builtin:status",
+    label: "Status",
+    description: "查看版本、模型、账号、连通性和工具状态的桌面快照。",
+    commandName: "status",
+    insertValue: "/status ",
+    kind: "status-card",
+  },
+  {
+    id: "builtin:stats",
+    label: "Stats",
+    description: "查看当前桌面会话的活跃度与使用上下文预览。",
+    commandName: "stats",
+    insertValue: "/stats ",
+    kind: "status-card",
+  },
+  {
+    id: "builtin:usage",
+    label: "Usage",
+    description: "查看 plan usage limits 的入口说明与当前 provider 适用性。",
+    commandName: "usage",
+    insertValue: "/usage ",
+    kind: "status-card",
+  },
+];
+
 function shouldShowSlashSuggestions(value: string) {
   return value.startsWith("/") && !value.includes(" ");
 }
 
+function supportsAppInfoBridge() {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.desktopApp?.getAppInfo === "function"
+  );
+}
+
 function normalizeSlashSuggestionDescription(description: string) {
   return description.replace(/\s+/g, " ").trim();
+}
+
+function getPathTailSegment(path: string | null) {
+  if (!path) {
+    return "未打开";
+  }
+
+  const segments = path.split("/").filter(Boolean);
+  return segments.at(-1) ?? path;
 }
 
 function getSlashSuggestionScore(
@@ -345,6 +408,32 @@ function buildReviewCommandSuggestions(query: string): SlashSuggestion[] {
     .map((entry) => entry.suggestion);
 }
 
+function buildStatusCommandSuggestions(query: string): SlashSuggestion[] {
+  if (query.length === 0) {
+    return statusCommandSuggestions;
+  }
+
+  return statusCommandSuggestions
+    .map((suggestion, index) => ({
+      index,
+      score: getSlashSuggestionScore(query, {
+        name: suggestion.commandName,
+        label: suggestion.label,
+        description: suggestion.description,
+      }),
+      suggestion,
+    }))
+    .filter((entry) => Number.isFinite(entry.score))
+    .sort((left, right) => {
+      if (left.score !== right.score) {
+        return left.score - right.score;
+      }
+
+      return left.index - right.index;
+    })
+    .map((entry) => entry.suggestion);
+}
+
 function buildSlashSuggestionSections(
   value: string,
   snapshot: SkillSnapshot | null,
@@ -356,6 +445,7 @@ function buildSlashSuggestionSections(
   const query = value.slice(1).trim().toLowerCase();
   const sections: SlashSuggestionSection[] = [];
   const reviewSuggestions = buildReviewCommandSuggestions(query);
+  const statusSuggestions = buildStatusCommandSuggestions(query);
   const skillSuggestions = buildSlashSkillSuggestions(query, snapshot);
 
   if (reviewSuggestions.length > 0) {
@@ -363,6 +453,14 @@ function buildSlashSuggestionSections(
       id: "review",
       title: "代码审查",
       suggestions: reviewSuggestions,
+    });
+  }
+
+  if (statusSuggestions.length > 0) {
+    sections.push({
+      id: "status",
+      title: "状态、诊断与运营",
+      suggestions: statusSuggestions,
     });
   }
 
@@ -377,6 +475,156 @@ function buildSlashSuggestionSections(
   return sections;
 }
 
+function buildSlashPreviewCardData(params: {
+  suggestion: SlashSuggestion;
+  appInfo: AppInfo | null;
+  providerId: DesktopProviderId;
+  modelLabel: string;
+  activeSessionTitle: string | null;
+  activeWorktreePath: string | null;
+  conversationMode: ThreadConversationMode;
+  skillSnapshot: SkillSnapshot | null;
+}): SlashPreviewCardData {
+  const {
+    suggestion,
+    appInfo,
+    providerId,
+    modelLabel,
+    activeSessionTitle,
+    activeWorktreePath,
+    conversationMode,
+    skillSnapshot,
+  } = params;
+  const projectLabel = getPathTailSegment(activeWorktreePath);
+  const sessionLabel = activeSessionTitle ?? "未选择线程";
+  const providerLabel = providerLabels[providerId];
+  const invocableSkillCount = skillSnapshot?.skills.filter(
+    (skill) => skill.userInvocable,
+  ).length ?? 0;
+
+  switch (suggestion.commandName) {
+    case "status":
+      return {
+        title: "运行状态总览",
+        commandLabel: "/status",
+        accentClassName:
+          "border-[rgba(14,165,233,0.22)] bg-[linear-gradient(180deg,rgba(240,249,255,0.98)_0%,rgba(232,244,255,0.86)_100%)] dark:border-[rgba(56,189,248,0.22)] dark:bg-[linear-gradient(180deg,rgba(12,24,40,0.96)_0%,rgba(10,37,64,0.86)_100%)]",
+        icon: "status",
+        rows: [
+          {
+            label: "Desktop 版本",
+            value: appInfo?.appVersion ?? "未知",
+          },
+          {
+            label: "当前模型",
+            value: `${providerLabel} · ${modelLabel}`,
+          },
+          {
+            label: "当前线程",
+            value: sessionLabel,
+          },
+          {
+            label: "当前项目",
+            value: projectLabel,
+          },
+        ],
+      };
+    case "stats":
+      return {
+        title: "使用统计预览",
+        commandLabel: "/stats",
+        accentClassName:
+          "border-[rgba(59,130,246,0.2)] bg-[linear-gradient(180deg,rgba(239,246,255,0.98)_0%,rgba(238,242,255,0.88)_100%)] dark:border-[rgba(96,165,250,0.18)] dark:bg-[linear-gradient(180deg,rgba(22,27,46,0.96)_0%,rgba(19,34,69,0.88)_100%)]",
+        icon: "stats",
+        rows: [
+          {
+            label: "交互模式",
+            value: conversationMode.toUpperCase(),
+          },
+          {
+            label: "活跃线程",
+            value: sessionLabel,
+          },
+          {
+            label: "可用技能",
+            value: `${invocableSkillCount} 个`,
+          },
+          {
+            label: "项目上下文",
+            value: projectLabel,
+          },
+        ],
+      };
+    default:
+      return {
+        title: "额度与账户概览",
+        commandLabel: "/usage",
+        accentClassName:
+          "border-[rgba(245,158,11,0.24)] bg-[linear-gradient(180deg,rgba(255,251,235,0.98)_0%,rgba(255,247,237,0.9)_100%)] dark:border-[rgba(245,158,11,0.22)] dark:bg-[linear-gradient(180deg,rgba(49,28,12,0.96)_0%,rgba(66,36,10,0.88)_100%)]",
+        icon: "usage",
+        rows: [
+          {
+            label: "当前 Provider",
+            value: providerLabel,
+          },
+          {
+            label: "当前模型",
+            value: modelLabel,
+          },
+          {
+            label: "账户范围",
+            value: "Claude 账号可见",
+          },
+          {
+            label: "额度状态",
+            value: "Desktop 暂未接入",
+          },
+        ],
+      };
+  }
+}
+
+function getSlashSuggestionIconClassName(
+  suggestion: SlashSuggestion,
+  selected: boolean,
+) {
+  if (suggestion.kind === "status-card") {
+    return selected
+      ? "bg-[rgba(15,118,110,0.16)] text-[rgb(15,118,110)] dark:bg-[rgba(45,212,191,0.14)] dark:text-[rgb(94,234,212)]"
+      : "bg-[rgba(13,148,136,0.12)] text-[rgb(15,118,110)] dark:bg-[rgba(45,212,191,0.1)] dark:text-[rgb(94,234,212)]";
+  }
+
+  if (suggestion.kind === "review-command") {
+    return selected
+      ? "bg-[rgba(14,165,233,0.18)] text-[rgb(3,105,161)] dark:bg-[rgba(56,189,248,0.16)] dark:text-[rgb(125,211,252)]"
+      : "bg-[rgba(14,165,233,0.12)] text-[rgb(14,116,144)] dark:bg-[rgba(56,189,248,0.12)] dark:text-[rgb(103,232,249)]";
+  }
+
+  return selected
+    ? "bg-[rgba(99,102,241,0.18)] text-[rgb(79,70,229)]"
+    : "bg-[rgba(148,163,184,0.12)] text-[var(--color-muted)]";
+}
+
+function renderSlashSuggestionIcon(suggestion: SlashSuggestion) {
+  if (suggestion.kind === "status-card") {
+    if (suggestion.commandName === "status") {
+      return <Activity className="h-3.5 w-3.5" aria-hidden="true" />;
+    }
+
+    if (suggestion.commandName === "stats") {
+      return <BarChart3 className="h-3.5 w-3.5" aria-hidden="true" />;
+    }
+
+    return <Gauge className="h-3.5 w-3.5" aria-hidden="true" />;
+  }
+
+  if (suggestion.kind === "review-command") {
+    return <Search className="h-3.5 w-3.5" aria-hidden="true" />;
+  }
+
+  return <Package className="h-3.5 w-3.5" aria-hidden="true" />;
+}
+
 export function WorkspaceComposer({
   activeSessionTitle,
   activeSessionId,
@@ -386,10 +634,13 @@ export function WorkspaceComposer({
   hasWorktree,
 }: WorkspaceComposerProps) {
   const [value, setValue] = useState("");
+  const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [providerSnapshot, setProviderSnapshot] =
     useState<DesktopProviderSettingsSnapshot | null>(null);
   const [skillSnapshot, setSkillSnapshot] = useState<SkillSnapshot | null>(null);
   const [selectedSlashCommand, setSelectedSlashCommand] =
+    useState<SlashSuggestion | null>(null);
+  const [selectedStatusPreview, setSelectedStatusPreview] =
     useState<SlashSuggestion | null>(null);
   const [selectedSkillPills, setSelectedSkillPills] = useState<
     SlashSuggestion[]
@@ -397,6 +648,7 @@ export function WorkspaceComposer({
   const [selectedSlashSuggestionIndex, setSelectedSlashSuggestionIndex] =
     useState(0);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const previewCardRef = useRef<HTMLDivElement | null>(null);
   const slashSuggestionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const composerValue = selectedSlashCommand
     ? `${selectedSlashCommand.insertValue}${value}`
@@ -423,6 +675,31 @@ export function WorkspaceComposer({
   const setComposerEffortSelection = useUIStore(
     (state) => state.setComposerEffortSelection,
   );
+
+  useEffect(() => {
+    if (!supportsAppInfoBridge()) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void window.desktopApp
+      .getAppInfo()
+      .then((info) => {
+        if (!cancelled) {
+          setAppInfo(info);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAppInfo(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!supportsProviderSettingsBridge()) {
@@ -529,7 +806,33 @@ export function WorkspaceComposer({
   const showSlashSuggestions =
     hasActiveSession &&
     !selectedSlashCommand &&
+    !selectedStatusPreview &&
     slashSuggestions.length > 0;
+  const selectedStatusPreviewCard = useMemo(
+    () =>
+      selectedStatusPreview
+        ? buildSlashPreviewCardData({
+            suggestion: selectedStatusPreview,
+            appInfo,
+            providerId: composerProviderId,
+            modelLabel: modelButtonLabel,
+            activeSessionTitle,
+            activeWorktreePath,
+            conversationMode,
+            skillSnapshot,
+          })
+        : null,
+    [
+      activeSessionTitle,
+      activeWorktreePath,
+      appInfo,
+      composerProviderId,
+      conversationMode,
+      modelButtonLabel,
+      selectedStatusPreview,
+      skillSnapshot,
+    ],
+  );
 
   const defaultPlaceholder = !hasWorktree
     ? "先打开一个项目，再从左侧创建或选择线程"
@@ -572,6 +875,7 @@ export function WorkspaceComposer({
         profile: "thread-tui",
       });
       await window.desktopApp.writeTerminal(terminalSessionId, normalizedInput);
+      setSelectedStatusPreview(null);
       setSelectedSlashCommand(null);
       setSelectedSkillPills([]);
       applyValue("");
@@ -587,11 +891,25 @@ export function WorkspaceComposer({
     });
   };
 
+  const handleComposerChange = (nextValue: string) => {
+    if (selectedStatusPreview) {
+      setSelectedStatusPreview(null);
+    }
+
+    setValue(nextValue);
+  };
+
   const applySlashSuggestion = (suggestion: SlashSuggestion) => {
-    if (suggestion.kind === "review-command") {
+    if (suggestion.kind === "status-card") {
+      setSelectedStatusPreview(suggestion);
+      setSelectedSlashCommand(null);
+      setSelectedSkillPills([]);
+    } else if (suggestion.kind === "review-command") {
+      setSelectedStatusPreview(null);
       setSelectedSlashCommand(suggestion);
       setSelectedSkillPills([]);
     } else {
+      setSelectedStatusPreview(null);
       setSelectedSlashCommand(null);
       setSelectedSkillPills((current) => [...current, suggestion]);
     }
@@ -603,6 +921,25 @@ export function WorkspaceComposer({
       textareaRef.current?.setSelectionRange(0, 0);
     });
   };
+
+  useEffect(() => {
+    if (!selectedStatusPreview) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (previewCardRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setSelectedStatusPreview(null);
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [selectedStatusPreview]);
 
   const {
     isSupported: supportsVoiceDictation,
@@ -651,7 +988,7 @@ export function WorkspaceComposer({
       slashSuggestionRefs.current[selectedSlashSuggestionIndex];
     if (typeof activeSuggestion?.scrollIntoView === "function") {
       activeSuggestion.scrollIntoView({
-        block: "nearest",
+        block: "center",
       });
     }
   }, [selectedSlashSuggestionIndex, showSlashSuggestions]);
@@ -664,6 +1001,17 @@ export function WorkspaceComposer({
     ) {
       event.preventDefault();
       setSelectedSlashCommand(null);
+      return;
+    }
+
+    if (
+      selectedStatusPreview &&
+      (event.key === "Escape" ||
+        (value.length === 0 &&
+          (event.key === "Backspace" || event.key === "Delete")))
+    ) {
+      event.preventDefault();
+      setSelectedStatusPreview(null);
       return;
     }
 
@@ -741,14 +1089,17 @@ export function WorkspaceComposer({
       className="mx-auto w-full max-w-[920px]"
       data-thread-composer="surface"
     >
-      <div className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-panel)] p-2 backdrop-blur-xl">
-        <div className="relative px-3 pt-1">
+      <div className="relative rounded-[28px] border border-[var(--color-border)] bg-[var(--color-panel)] p-2 backdrop-blur-xl">
+        <div className="px-3 pt-1">
           {showSlashSuggestions ? (
             <div
               id={SLASH_SUGGESTIONS_LIST_ID}
               role="listbox"
               aria-label="Slash suggestions"
-              className="absolute inset-x-3 bottom-full z-20 mb-2 max-h-56 overflow-y-auto rounded-[18px] border border-[var(--color-border)] bg-[var(--color-panel)] p-2 shadow-[var(--shadow-panel)] backdrop-blur-xl"
+              className={cn(
+                SLASH_FLOATING_LAYER_POSITION_CLASS,
+                "z-20 max-h-56 overflow-y-auto rounded-[18px] border border-[var(--color-border)] bg-[var(--color-panel)] p-2 shadow-[var(--shadow-panel)] backdrop-blur-xl",
+              )}
             >
               {(() => {
                 let suggestionOffset = 0;
@@ -767,8 +1118,6 @@ export function WorkspaceComposer({
                           const flatIndex = sectionStartIndex + index;
                           const selected =
                             flatIndex === selectedSlashSuggestionIndex;
-                          const isReviewCommand =
-                            suggestion.kind === "review-command";
 
                           return (
                             <button
@@ -800,26 +1149,13 @@ export function WorkspaceComposer({
                                 <span
                                   className={cn(
                                     "flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
-                                    selected && isReviewCommand
-                                      ? "bg-[rgba(14,165,233,0.18)] text-[rgb(3,105,161)] dark:bg-[rgba(56,189,248,0.16)] dark:text-[rgb(125,211,252)]"
-                                      : selected
-                                        ? "bg-[rgba(99,102,241,0.18)] text-[rgb(79,70,229)]"
-                                        : isReviewCommand
-                                          ? "bg-[rgba(14,165,233,0.12)] text-[rgb(14,116,144)] dark:bg-[rgba(56,189,248,0.12)] dark:text-[rgb(103,232,249)]"
-                                          : "bg-[rgba(148,163,184,0.12)] text-[var(--color-muted)]",
+                                    getSlashSuggestionIconClassName(
+                                      suggestion,
+                                      selected,
+                                    ),
                                   )}
                                 >
-                                  {isReviewCommand ? (
-                                    <Search
-                                      className="h-3.5 w-3.5"
-                                      aria-hidden="true"
-                                    />
-                                  ) : (
-                                    <Package
-                                      className="h-3.5 w-3.5"
-                                      aria-hidden="true"
-                                    />
-                                  )}
+                                  {renderSlashSuggestionIcon(suggestion)}
                                 </span>
                                 <span className="truncate text-[13px] font-medium text-[var(--color-fg)]">
                                   {suggestion.label}
@@ -836,6 +1172,65 @@ export function WorkspaceComposer({
                   );
                 });
               })()}
+            </div>
+          ) : null}
+          {selectedStatusPreviewCard ? (
+            <div
+              ref={previewCardRef}
+              role="dialog"
+              aria-label={`${selectedStatusPreviewCard.title} 悬浮卡片`}
+              className={cn(
+                SLASH_FLOATING_LAYER_POSITION_CLASS,
+                "z-30 overflow-hidden rounded-[22px] border p-5 shadow-[var(--shadow-panel)] backdrop-blur-xl",
+                selectedStatusPreviewCard.accentClassName,
+              )}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/60 text-[rgb(15,23,42)] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:bg-white/10 dark:text-white">
+                    {selectedStatusPreviewCard.icon === "status" ? (
+                      <Activity className="h-4 w-4" aria-hidden="true" />
+                    ) : selectedStatusPreviewCard.icon === "stats" ? (
+                      <BarChart3 className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <Gauge className="h-4 w-4" aria-hidden="true" />
+                    )}
+                  </span>
+                  <div className="min-w-0 space-y-1">
+                    <span className="inline-flex rounded-full border border-current/10 bg-white/40 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--color-muted)] dark:bg-black/10">
+                      {selectedStatusPreviewCard.commandLabel}
+                    </span>
+                    <div className="truncate text-[17px] font-semibold tracking-[-0.01em] text-[var(--color-fg)]">
+                      {selectedStatusPreviewCard.title}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedStatusPreview(null);
+                  }}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/55 text-[var(--color-muted)] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition-colors duration-150 hover:bg-white/75 hover:text-[var(--color-fg)] dark:bg-white/10 dark:hover:bg-white/15"
+                  aria-label="关闭状态预览卡片"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+              <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+                {selectedStatusPreviewCard.rows.map((row) => (
+                  <div
+                    key={row.label}
+                    className="rounded-[16px] border border-white/45 bg-white/55 px-3.5 py-3 dark:border-white/10 dark:bg-white/5"
+                  >
+                    <div className="text-[11px] uppercase tracking-[0.12em] text-[var(--color-muted)]">
+                      {row.label}
+                    </div>
+                    <div className="mt-1.5 text-[14px] font-medium text-[var(--color-fg)]">
+                      {row.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
           <div
@@ -871,17 +1266,17 @@ export function WorkspaceComposer({
               ref={textareaRef}
               rows={1}
               value={value}
-              onChange={(event) => setValue(event.target.value)}
+              onChange={(event) => handleComposerChange(event.target.value)}
               onInput={handleInput}
               onKeyDown={handleKeyDown}
               placeholder={placeholder}
-                disabled={!hasActiveSession}
-                aria-label={activeSessionTitle ?? "Session composer"}
-                aria-controls={
-                  showSlashSuggestions
-                    ? SLASH_SUGGESTIONS_LIST_ID
-                    : undefined
-                }
+              disabled={!hasActiveSession}
+              aria-label={activeSessionTitle ?? "Session composer"}
+              aria-controls={
+                showSlashSuggestions
+                  ? SLASH_SUGGESTIONS_LIST_ID
+                  : undefined
+              }
               aria-expanded={showSlashSuggestions}
               aria-activedescendant={
                 showSlashSuggestions

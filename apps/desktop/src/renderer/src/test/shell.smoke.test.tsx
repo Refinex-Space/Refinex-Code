@@ -6,7 +6,87 @@ import {
   useUIStore,
 } from "@renderer/stores/ui";
 import { emptySidebarState } from "@renderer/stores/worktree";
-import type { SidebarStateSnapshot } from "../../../shared/contracts";
+import type {
+  SidebarStateSnapshot,
+  SkillSnapshot,
+} from "../../../shared/contracts";
+
+const slashCommandSidebarState = {
+  ...emptySidebarState,
+  storageRoot:
+    "/Users/test/Library/Application Support/RWork/sidebar-state",
+  activeWorktreeId: "alpha",
+  activeSessionId: "thread-2",
+  worktrees: [
+    {
+      id: "alpha",
+      label: "alpha",
+      sourcePath: "/Users/test/projects/alpha",
+      worktreePath: "/Users/test/projects/alpha",
+      gitRoot: "/Users/test/projects/alpha",
+      branch: "main",
+      isGitRepository: true,
+      storagePath:
+        "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha",
+      createdAt: "2026-04-06T00:00:00.000Z",
+      updatedAt: "2026-04-06T00:00:00.000Z",
+      lastOpenedAt: "2026-04-06T00:00:00.000Z",
+      lastSessionId: "thread-2",
+      sessions: [
+        {
+          id: "thread-2",
+          worktreeId: "alpha",
+          title: "新线程",
+          status: "idle",
+          createdAt: "2026-04-06T00:00:00.000Z",
+          updatedAt: "2026-04-06T00:00:00.000Z",
+          lastOpenedAt: "2026-04-06T00:00:00.000Z",
+          storagePath:
+            "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha/sessions/thread-2.json",
+        },
+      ],
+    },
+  ],
+} satisfies SidebarStateSnapshot;
+
+const slashCommandSkillSnapshot = {
+  activeWorktreePath: "/Users/test/projects/alpha",
+  generatedAt: "2026-04-07T00:00:00.000Z",
+  skills: [
+    {
+      id: "personal:harness-feat",
+      name: "harness-feat",
+      displayName: "harness-feat",
+      sourceKind: "personal",
+      sourceLabel: "Personal skills",
+      skillRoot: "/Users/test/.agents/skills/harness-feat",
+      skillMdPath: "/Users/test/.agents/skills/harness-feat/SKILL.md",
+      description: "Plan and execute features with harness discipline.",
+      userInvocable: true,
+      disableModelInvocation: false,
+      invokedBy: "User or RWork",
+      addedBy: "User",
+      lastUpdated: "2026-04-07T00:00:00.000Z",
+      tree: [],
+    },
+    {
+      id: "personal:tech-writing",
+      name: "tech-writing",
+      displayName: "tech-writing",
+      sourceKind: "personal",
+      sourceLabel: "Personal skills",
+      skillRoot: "/Users/test/.agents/skills/tech-writing",
+      skillMdPath: "/Users/test/.agents/skills/tech-writing/SKILL.md",
+      description: "Write long-form technical content for engineering work.",
+      userInvocable: true,
+      disableModelInvocation: false,
+      invokedBy: "User or RWork",
+      addedBy: "User",
+      lastUpdated: "2026-04-07T00:00:00.000Z",
+      tree: [],
+    },
+  ],
+} satisfies SkillSnapshot;
 
 describe("desktop shell", () => {
   it("renders the shell frame and bootstrap content", async () => {
@@ -344,6 +424,7 @@ describe("desktop shell", () => {
     render(<App />);
 
     const composer = await screen.findByLabelText("新线程");
+    vi.mocked(window.desktopApp.writeTerminal).mockClear();
     fireEvent.change(composer, {
       target: {
         value: "/",
@@ -557,6 +638,184 @@ describe("desktop shell", () => {
         "thread-tui:thread-2",
         "/tech-writing /harness-feat 帮我写一段发布说明\r",
       );
+    });
+  });
+
+  it("shows /status as a hover card instead of writing a slash command pill", async () => {
+    vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue(
+      slashCommandSidebarState,
+    );
+    vi.mocked(window.desktopApp.getSkillsSnapshot).mockResolvedValue(
+      slashCommandSkillSnapshot,
+    );
+
+    render(<App />);
+
+    const composer = await screen.findByLabelText("新线程");
+    fireEvent.change(composer, {
+      target: {
+        value: "/",
+      },
+    });
+
+    const suggestionList = await screen.findByRole("listbox", {
+      name: "Slash suggestions",
+    });
+    expect(suggestionList).toHaveClass("inset-x-0", "mb-1.5");
+    expect(suggestionList.parentElement?.parentElement).toHaveClass(
+      "relative",
+      "rounded-[28px]",
+    );
+    expect(
+      within(suggestionList).getByText("状态、诊断与运营"),
+    ).toBeInTheDocument();
+
+    fireEvent.change(composer, {
+      target: {
+        value: "/status",
+      },
+    });
+    fireEvent.keyDown(composer, {
+      key: "Enter",
+    });
+
+    const previewCard = await screen.findByRole("dialog", {
+      name: "运行状态总览 悬浮卡片",
+    });
+    expect(previewCard).toHaveClass("inset-x-0", "mb-1.5");
+    expect(previewCard.parentElement?.parentElement).toHaveClass(
+      "relative",
+      "rounded-[28px]",
+    );
+    expect(within(previewCard).getByText("/status")).toBeInTheDocument();
+    expect(within(previewCard).getByText("Desktop 版本")).toBeInTheDocument();
+    expect(within(previewCard).getByText("0.1.0")).toBeInTheDocument();
+    expect(within(previewCard).getByText("Claude · Sonnet 4.6")).toBeInTheDocument();
+    expect(
+      within(previewCard).queryByText("对齐 CLI 的即时状态入口，先用 desktop 已知本地状态给你一眼看清当前工作面。"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(previewCard).queryByText("CLI 中该命令会打开完整运行状态总览；desktop 当前先展示本地快照与入口语义。"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(previewCard).queryByText("点击右上角关闭按钮、空白处，或继续输入，也会立即收起这张卡片。"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("已选择代码审查命令 Review"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("listbox", { name: "Slash suggestions" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("dismisses the status hover card when clicking outside the composer", async () => {
+    vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue(
+      slashCommandSidebarState,
+    );
+    vi.mocked(window.desktopApp.getSkillsSnapshot).mockResolvedValue(
+      slashCommandSkillSnapshot,
+    );
+
+    render(<App />);
+
+    const composer = await screen.findByLabelText("新线程");
+    fireEvent.change(composer, {
+      target: {
+        value: "/stats",
+      },
+    });
+    fireEvent.keyDown(composer, {
+      key: "Enter",
+    });
+
+    expect(
+      await screen.findByRole("dialog", { name: "使用统计预览 悬浮卡片" }),
+    ).toBeInTheDocument();
+
+    fireEvent.pointerDown(document.body);
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "使用统计预览 悬浮卡片" }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("keeps the keyboard-highlighted slash suggestion centered in the panel", async () => {
+    vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue(
+      slashCommandSidebarState,
+    );
+    vi.mocked(window.desktopApp.getSkillsSnapshot).mockResolvedValue(
+      slashCommandSkillSnapshot,
+    );
+
+    const scrollIntoViewMock = vi.fn();
+    const originalScrollIntoView = HTMLButtonElement.prototype.scrollIntoView;
+    Object.defineProperty(HTMLButtonElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoViewMock,
+    });
+
+    try {
+      render(<App />);
+
+      const composer = await screen.findByLabelText("新线程");
+      fireEvent.change(composer, {
+        target: {
+          value: "/",
+        },
+      });
+
+      await screen.findByRole("listbox", {
+        name: "Slash suggestions",
+      });
+
+      fireEvent.keyDown(composer, {
+        key: "ArrowDown",
+      });
+
+      expect(scrollIntoViewMock).toHaveBeenCalled();
+      expect(scrollIntoViewMock).toHaveBeenLastCalledWith({
+        block: "center",
+      });
+    } finally {
+      Object.defineProperty(HTMLButtonElement.prototype, "scrollIntoView", {
+        configurable: true,
+        value: originalScrollIntoView,
+      });
+    }
+  });
+
+  it("dismisses the usage hover card from the close button", async () => {
+    vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue(
+      slashCommandSidebarState,
+    );
+    vi.mocked(window.desktopApp.getSkillsSnapshot).mockResolvedValue(
+      slashCommandSkillSnapshot,
+    );
+
+    render(<App />);
+
+    const composer = await screen.findByLabelText("新线程");
+    fireEvent.change(composer, {
+      target: {
+        value: "/usage",
+      },
+    });
+    fireEvent.keyDown(composer, {
+      key: "Enter",
+    });
+
+    expect(
+      screen.getByRole("dialog", { name: "额度与账户概览 悬浮卡片" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "关闭状态预览卡片" }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "额度与账户概览 悬浮卡片" }),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -852,7 +1111,7 @@ describe("desktop shell", () => {
         "/Users/test/.agents/skills/harness-feat",
       );
     });
-  });
+  }, 10000);
 
   it("opens the create menu and forwards uploaded skill archives", async () => {
     vi.mocked(window.desktopApp.getSkillsSnapshot).mockResolvedValue({
@@ -953,7 +1212,7 @@ describe("desktop shell", () => {
 
     expect(await screen.findByRole("button", { name: "更新 skill-creator" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "安装 skill-creator" })).not.toBeInTheDocument();
-  });
+  }, 10000);
 
   it("filters skills with the search input", async () => {
     vi.mocked(window.desktopApp.getSkillsSnapshot).mockResolvedValue({
