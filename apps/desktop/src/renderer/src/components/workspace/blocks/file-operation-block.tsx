@@ -173,6 +173,47 @@ function shortenPath(fullPath: string): string {
   return segments.slice(-2).join("/");
 }
 
+/**
+ * Smart path for code block header: keep first meaningful dir + … + last 2 segments.
+ * e.g. "/Users/refinex/develop/code/refinex/Refinex-Skills/README.zh.md"
+ *   → "Refinex-Skills/README.zh.md"
+ * Long: "/a/b/c/d/e/src/components/workspace/blocks/file.tsx"
+ *   → "src/…/blocks/file.tsx"
+ */
+function smartPath(fullPath: string): string {
+  const segments = fullPath.replace(/\\/g, "/").split("/").filter(Boolean);
+  if (segments.length <= 3) return segments.join("/");
+
+  // Drop common prefixes: Users, home, develop, code, etc.
+  const boring = new Set([
+    "users",
+    "home",
+    "var",
+    "tmp",
+    "opt",
+    "develop",
+    "code",
+    "projects",
+    "workspace",
+    "workspaces",
+  ]);
+  let start = 0;
+  while (
+    start < segments.length - 3 &&
+    boring.has(segments[start].toLowerCase())
+  ) {
+    start++;
+  }
+  // Also skip username-like segment right after Users/home
+  if (start > 0 && start < segments.length - 3) start++;
+
+  const meaningful = segments.slice(start);
+  if (meaningful.length <= 3) return meaningful.join("/");
+
+  // first-dir/…/parent/file
+  return `${meaningful[0]}/…/${meaningful.slice(-2).join("/")}`;
+}
+
 // ─── Copy button ──────────────────────────────────────────────────────────────
 
 function CopyButton({ text }: { text: string }) {
@@ -189,7 +230,7 @@ function CopyButton({ text }: { text: string }) {
     <button
       type="button"
       onClick={handleCopy}
-      className="rounded-md p-1 text-[var(--color-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-foreground)] transition-colors"
+      className="rounded-md p-1.5 text-[#6e7681] hover:bg-[#30363d] hover:text-[#e6edf3] transition-colors"
       title="复制"
     >
       {copied ? (
@@ -221,8 +262,8 @@ function DiffCodeView({
   return (
     <div className="rounded-lg border border-[var(--color-border)] bg-[#0d1117] overflow-hidden">
       {/* Code block header */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[#161b22] border-b border-[var(--color-border)]">
-        <span className="font-mono text-[11px] text-[var(--color-muted)] truncate">
+      <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-[#161b22] border-b border-[var(--color-border)]">
+        <span className="font-mono text-[11px] text-[#8b949e] truncate min-w-0">
           {fileName ?? "file"}
         </span>
         <CopyButton text={rawText} />
@@ -360,7 +401,7 @@ export function FileOperationBlock({ block }: FileOperationBlockProps) {
   }, []);
 
   return (
-    <div className="group my-0.5">
+    <div className="group">
       {/* Collapsed summary row */}
       <button
         type="button"
@@ -427,12 +468,15 @@ export function FileOperationBlock({ block }: FileOperationBlockProps) {
       {expanded && isExpandable && (
         <div className="mt-1 ml-5.5">
           {hasContent ? (
-            <DiffCodeView lines={diff.lines} fileName={displayName} />
+            <DiffCodeView
+              lines={diff.lines}
+              fileName={filePath ? smartPath(filePath) : displayName}
+            />
           ) : hasResultText ? (
             <div className="rounded-lg border border-[var(--color-border)] bg-[#0d1117] overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-1.5 bg-[#161b22] border-b border-[var(--color-border)]">
-                <span className="font-mono text-[11px] text-[var(--color-muted)] truncate">
-                  {displayName ?? "输出"}
+              <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-[#161b22] border-b border-[var(--color-border)]">
+                <span className="font-mono text-[11px] text-[#8b949e] truncate min-w-0">
+                  {filePath ? smartPath(filePath) : (displayName ?? "输出")}
                 </span>
                 <CopyButton
                   text={typeof resultText === "string" ? resultText : ""}
