@@ -26,8 +26,11 @@ class MediaStreamMock {
 }
 
 class ScriptProcessorNodeMock {
-  onaudioprocess: ((event: { inputBuffer: { getChannelData: (channel: number) => Float32Array } }) => void) | null =
-    null;
+  onaudioprocess:
+    | ((event: {
+        inputBuffer: { getChannelData: (channel: number) => Float32Array };
+      }) => void)
+    | null = null;
   connect = vi.fn();
   disconnect = vi.fn();
 
@@ -314,7 +317,10 @@ const desktopBridgeMock: DesktopBridge = {
   getAppearanceSettings: vi.fn().mockResolvedValue(defaultAppearanceSettings),
   saveAppearanceSettings: vi
     .fn()
-    .mockImplementation(async (settings) => ({ ...settings, storagePath: defaultAppearanceSettings.storagePath })),
+    .mockImplementation(async (settings) => ({
+      ...settings,
+      storagePath: defaultAppearanceSettings.storagePath,
+    })),
   getProviderSettings: vi.fn().mockResolvedValue(defaultProviderSettings),
   saveProviderSettings: vi.fn().mockImplementation(async (settings) => {
     if (settings.providerId === "anthropic") {
@@ -445,6 +451,7 @@ const desktopBridgeMock: DesktopBridge = {
       },
     ],
   })),
+  onGuiConversationBlockDelta: vi.fn().mockImplementation(() => () => {}),
   revealInFinder: vi.fn().mockResolvedValue(undefined),
   showItemInFolder: vi.fn().mockResolvedValue(undefined),
   createTerminalSession: vi.fn().mockResolvedValue({
@@ -475,7 +482,9 @@ if (typeof window !== "undefined") {
     document.documentElement.style.removeProperty("--code-font-size");
     document.documentElement.style.removeProperty("--color-sidebar");
     document.documentElement.style.removeProperty("--color-bg");
-    vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue(defaultSidebarState);
+    vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue(
+      defaultSidebarState,
+    );
     vi.mocked(window.desktopApp.getSkillsSnapshot).mockResolvedValue(
       defaultSkillsSnapshot,
     );
@@ -525,8 +534,12 @@ if (typeof window !== "undefined") {
       sampleCount: 16000,
       durationMs: 180,
     });
-    vi.mocked(window.desktopApp.openVoiceDictationModelsDirectory).mockResolvedValue(undefined);
-    vi.mocked(window.desktopApp.onVoiceDictationProgress).mockImplementation(() => () => {});
+    vi.mocked(
+      window.desktopApp.openVoiceDictationModelsDirectory,
+    ).mockResolvedValue(undefined);
+    vi.mocked(window.desktopApp.onVoiceDictationProgress).mockImplementation(
+      () => () => {},
+    );
     vi.mocked(window.desktopApp.getAppearanceSettings).mockResolvedValue(
       defaultAppearanceSettings,
     );
@@ -611,7 +624,8 @@ if (typeof window !== "undefined") {
               name: settings.name,
               enabled: settings.enabled,
               transport: settings.transport,
-              transportLabel: settings.transport === "http" ? "流式 HTTP" : "SSE",
+              transportLabel:
+                settings.transport === "http" ? "流式 HTTP" : "SSE",
               summary: settings.url,
               url: settings.url,
               headers: settings.headers,
@@ -637,14 +651,28 @@ if (typeof window !== "undefined") {
         ),
       }),
     );
-    vi.mocked(window.desktopApp.openWorktree).mockResolvedValue(defaultSidebarState);
+    vi.mocked(window.desktopApp.openWorktree).mockResolvedValue(
+      defaultSidebarState,
+    );
     vi.mocked(window.desktopApp.pickAndOpenWorktree).mockResolvedValue(null);
-    vi.mocked(window.desktopApp.selectWorktree).mockResolvedValue(defaultSidebarState);
-    vi.mocked(window.desktopApp.removeWorktree).mockResolvedValue(defaultSidebarState);
-    vi.mocked(window.desktopApp.prepareSession).mockResolvedValue(defaultSidebarState);
-    vi.mocked(window.desktopApp.createSession).mockResolvedValue(defaultSidebarState);
-    vi.mocked(window.desktopApp.selectSession).mockResolvedValue(defaultSidebarState);
-    vi.mocked(window.desktopApp.removeSession).mockResolvedValue(defaultSidebarState);
+    vi.mocked(window.desktopApp.selectWorktree).mockResolvedValue(
+      defaultSidebarState,
+    );
+    vi.mocked(window.desktopApp.removeWorktree).mockResolvedValue(
+      defaultSidebarState,
+    );
+    vi.mocked(window.desktopApp.prepareSession).mockResolvedValue(
+      defaultSidebarState,
+    );
+    vi.mocked(window.desktopApp.createSession).mockResolvedValue(
+      defaultSidebarState,
+    );
+    vi.mocked(window.desktopApp.selectSession).mockResolvedValue(
+      defaultSidebarState,
+    );
+    vi.mocked(window.desktopApp.removeSession).mockResolvedValue(
+      defaultSidebarState,
+    );
     vi.mocked(window.desktopApp.showItemInFolder).mockResolvedValue(undefined);
     AudioContextMock.reset();
   });

@@ -5,6 +5,8 @@ import type {
 import type {
   DesktopGuiConversationSendInput,
   DesktopGuiConversationSnapshot,
+  GuiContentBlock,
+  GuiBlockDelta,
 } from "../../../../shared/contracts";
 import { ChevronDown } from "lucide-react";
 import { TerminalPanel } from "@renderer/components/terminal/terminal-panel";
@@ -99,6 +101,40 @@ export function WorkspaceHome({
       surface.removeEventListener("scroll", updateScrollState);
     };
   }, [activeConversationMode, showThreadSurface, guiConversation?.updatedAt]);
+
+  // Subscribe to streaming block deltas from the main process.
+  // The delta contains the GUI sessionId, so we scope updates to the active session.
+  // We match the pending assistant message by role+status instead of id because
+  // the optimistic message has a temporary id that differs from the real one.
+  useEffect(() => {
+    const unsubscribe = window.desktopApp.onGuiConversationBlockDelta(
+      (payload) => {
+        console.log(
+          `[GUI-DEBUG renderer] delta blockIdx=${payload.blockIndex} type=${payload.delta.type}`,
+        );
+        setGuiConversation((current) => {
+          if (!current || current.sessionId !== payload.sessionId) {
+            return current;
+          }
+          let changed = false;
+          const messages = current.messages.map((msg) => {
+            if (msg.role !== "assistant" || msg.status !== "pending") {
+              return msg;
+            }
+            const updatedBlocks = applyBlockDelta(
+              [...(msg.blocks ?? [])],
+              payload.blockIndex,
+              payload.delta,
+            );
+            changed = true;
+            return { ...msg, blocks: updatedBlocks };
+          });
+          return changed ? { ...current, messages } : current;
+        });
+      },
+    );
+    return unsubscribe;
+  }, []);
 
   const handleScrollToBottom = () => {
     const surface = threadSurfaceRef.current;
@@ -267,4 +303,57 @@ export function WorkspaceHome({
       </div>
     </div>
   );
+}
+
+// ─── Block delta application ──────────────────────────────────────────────────
+
+function applyBlockDelta(
+  blocks: GuiContentBlock[],
+  blockIndex: number,
+  delta: GuiBlockDelta,
+): GuiContentBlock[] {
+  const result = [...blocks];
+
+  switch (delta.type) {
+    case "block_added":
+      result[blockIndex] = delta.block;
+      break;
+    case "text_delta": {
+      const b = result[blockIndex];
+      if (b?.type === "text") {
+        result[blockIndex] = { ...b, text: b.text + delta.text };
+      }
+      break;
+    }
+    case "thinking_delta": {
+      const b = result[blockIndex];
+      if (b?.type === "thinking") {
+        result[blockIndex] = { ...b, thinking: b.thinking + delta.thinking };
+      }
+      break;
+    }
+    case "tool_status": {
+      const b = result[blockIndex];
+      if (b?.type === "tool_use") {
+        result[blockIndex] = { ...b, status: delta.status };
+      }
+      break;
+    }
+    case "tool_progress": {
+      const b = result[blockIndex];
+      if (b?.type === "tool_use") {
+        result[blockIndex] = { ...b, progress: delta.progress };
+      }
+      break;
+    }
+    case "tool_result": {
+      const b = result[blockIndex];
+      if (b?.type === "tool_use") {
+        result[blockIndex] = { ...b, result: delta.result };
+      }
+      break;
+    }
+  }
+
+  return result;
 }

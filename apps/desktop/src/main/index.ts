@@ -10,6 +10,11 @@ import type {
   AppearanceSettingsSnapshot,
   DesktopGuiConversationSendInput,
   DesktopGuiConversationSnapshot,
+  GuiConversationBlockDeltaPayload,
+  GuiContentBlock,
+  GuiThinkingBlock,
+  GuiToolUseBlock,
+  GuiToolResultPayload,
   DesktopMcpServerSaveInput,
   DesktopMcpServerToggleInput,
   DesktopMcpSettingsSnapshot,
@@ -72,15 +77,21 @@ const terminalSessions = new Map<string, TerminalSession>();
 const appName = "RWork";
 const require = createRequire(import.meta.url);
 const TERMINAL_BACKLOG_LIMIT = 512_000;
-const GUI_CONVERSATION_TIMEOUT_MS = 60_000;
+const GUI_CONVERSATION_TIMEOUT_MS = 300_000; // 5 minutes — multi-turn tool use may take time
 const desktopTerminalDebugTarget = process.env.REFINEX_DESKTOP_TERMINAL_DEBUG;
 
 let mainWindow: BrowserWindow | null = null;
-let worktreeStateStore: ReturnType<typeof createWorktreeStateStore> | null = null;
-let appearanceSettingsStore: ReturnType<typeof createAppearanceSettingsStore> | null = null;
-let providerSettingsStore: ReturnType<typeof createProviderSettingsStore> | null = null;
+let worktreeStateStore: ReturnType<typeof createWorktreeStateStore> | null =
+  null;
+let appearanceSettingsStore: ReturnType<
+  typeof createAppearanceSettingsStore
+> | null = null;
+let providerSettingsStore: ReturnType<
+  typeof createProviderSettingsStore
+> | null = null;
 let mcpSettingsStore: ReturnType<typeof createMcpSettingsStore> | null = null;
-let guiConversationStore: ReturnType<typeof createGuiConversationStore> | null = null;
+let guiConversationStore: ReturnType<typeof createGuiConversationStore> | null =
+  null;
 
 function writeDesktopTerminalDebug(scope: string, message: string) {
   if (!desktopTerminalDebugTarget) {
@@ -260,10 +271,7 @@ function resolveDefaultWorkspacePath(): string | null {
 }
 
 function emitToRenderer(
-  channel:
-    | "terminal:data"
-    | "terminal:exit"
-    | "voice-dictation:progress",
+  channel: "terminal:data" | "terminal:exit" | "voice-dictation:progress",
   payload:
     | TerminalDataPayload
     | TerminalExitPayload
@@ -426,7 +434,12 @@ function createTerminalSession({
 
     terminalSessions.set(sessionId, session);
 
-    return toTerminalSessionInfo(sessionId, resolvedCwd, launchSpec.command, true);
+    return toTerminalSessionInfo(
+      sessionId,
+      resolvedCwd,
+      launchSpec.command,
+      true,
+    );
   }
 
   const session: TerminalSession = {
@@ -497,12 +510,15 @@ function getGuiConversationStore() {
     userDataPath: app.getPath("userData"),
     runConversation: async ({
       cliSessionId,
+      guiSessionId,
+      messageId,
       resume,
       worktreePath,
       prompt,
       providerId,
       model,
       effort,
+      onDelta,
     }) => {
       const launchSpec = resolveDesktopCliLaunchSpec();
       const settingsOverride = JSON.stringify({
@@ -510,16 +526,20 @@ function getGuiConversationStore() {
         model,
         effortLevel: effort,
       });
+      // Use stream-json + verbose + include-partial-messages for real-time NDJSON:
+      //   --verbose is required for stream-json output mode (otherwise CLI exits with error).
+      //   --include-partial-messages enables stream_event messages (per-token content_block_*
+      //     events). Without this flag, stream_events are never emitted by QueryEngine.
+      //   --max-turns 30 allows multi-turn tool use.
       const args = [
         ...launchSpec.args,
         "-p",
-        "--bare",
         "--output-format",
-        "json",
+        "stream-json",
+        "--verbose",
+        "--include-partial-messages",
         "--max-turns",
-        "1",
-        "--tools",
-        "",
+        "30",
         "--settings",
         settingsOverride,
         ...(resume
@@ -527,6 +547,9 @@ function getGuiConversationStore() {
           : ["--session-id", cliSessionId]),
         prompt,
       ];
+      console.log(
+        `[GUI-DEBUG] spawn CLI: ${launchSpec.command} ${args.slice(0, -1).join(" ")} <prompt>`,
+      );
       const childEnv: NodeJS.ProcessEnv = {
         ...process.env,
         FORCE_COLOR: "0",
@@ -537,17 +560,13 @@ function getGuiConversationStore() {
 
       return await new Promise((resolve, reject) => {
         let settled = false;
-        const settleOnce = (
-          callback: () => void,
-        ) => {
-          if (settled) {
-            return;
-          }
-
+        const settleOnce = (callback: () => void) => {
+          if (settled) return;
           settled = true;
           clearTimeout(timeoutTimer);
           callback();
         };
+
         const child = spawn(launchSpec.command, args, {
           cwd: resolveTerminalPath(worktreePath),
           env: childEnv,
@@ -556,66 +575,331 @@ function getGuiConversationStore() {
         const timeoutTimer = setTimeout(() => {
           child.kill("SIGTERM");
           setTimeout(() => {
-            if (!child.killed) {
-              child.kill("SIGKILL");
-            }
+            if (!child.killed) child.kill("SIGKILL");
           }, 2_000);
           settleOnce(() => {
             reject(new Error("GUI 对话请求超时，请稍后重试。"));
           });
         }, GUI_CONVERSATION_TIMEOUT_MS);
 
-        let stdout = "";
+        // ── NDJSON streaming state ─────────────────────────────────────────
+        const contentBlocks: GuiContentBlock[] = [];
+        const toolUseIdToIdx = new Map<string, number>();
+        let turnStart = 0; // absolute block index where current turn begins
+        let turnCount = 0; // blocks seen in current turn (max index+1)
+        let lineBuffer = "";
         let stderr = "";
+        let finalOutputText: string | null = null;
+        let finalIsError = false;
+        let finalUsage:
+          | import("../shared/contracts").GuiMessageUsage
+          | undefined;
+        let finalDurationMs: number | undefined;
 
-        child.stdout.on("data", (chunk) => {
-          stdout += chunk.toString();
-        });
-        child.stderr.on("data", (chunk) => {
-          stderr += chunk.toString();
-        });
-        child.on("error", (error) => {
-          settleOnce(() => {
-            reject(error);
-          });
-        });
-        child.on("close", (exitCode) => {
-          settleOnce(() => {
-            const trimmedStdout = stdout.trim();
-            const trimmedStderr = stderr.trim();
+        const emitDelta = (
+          blockIdx: number,
+          delta: import("../shared/contracts").GuiBlockDelta,
+        ) => {
+          const payload: GuiConversationBlockDeltaPayload = {
+            sessionId: guiSessionId,
+            messageId,
+            blockIndex: blockIdx,
+            delta,
+          };
+          if (!mainWindow || mainWindow.isDestroyed()) {
+            console.warn(
+              `[GUI-DEBUG] emitDelta skipped: mainWindow unavailable (blockIdx=${blockIdx} type=${delta.type})`,
+            );
+          } else {
+            mainWindow.webContents.send(
+              "gui-conversation:block-delta",
+              payload,
+            );
+          }
+          onDelta(blockIdx, delta);
+        };
 
-            if (!trimmedStdout) {
-              reject(
-                new Error(
-                  trimmedStderr || `GUI 对话进程未返回结果（exit ${String(exitCode)}）。`,
-                ),
-              );
-              return;
+        let _debugLineCount = 0;
+        const processLine = (line: string) => {
+          if (!line) return;
+          let msg: { type?: unknown; [k: string]: unknown };
+          try {
+            msg = JSON.parse(line) as { type?: unknown; [k: string]: unknown };
+          } catch {
+            console.warn(
+              `[GUI-DEBUG] non-JSON stdout line (${line.length} chars): ${line.slice(0, 120)}`,
+            );
+            return;
+          }
+          // Log first 20 lines + every stream_event/tool/result type.
+          _debugLineCount++;
+          const msgType = String(msg.type ?? "?");
+          if (_debugLineCount <= 20 || msgType !== "stream_event") {
+            const sub = (msg.subtype as string | undefined) ?? "";
+            console.log(
+              `[GUI-DEBUG] line#${_debugLineCount} type=${msgType}${sub ? `/` + sub : ""}`,
+            );
+          }
+
+          switch (msg.type) {
+            // ── token-level streaming events ────────────────────────────────
+            case "stream_event": {
+              const ev = msg.event as
+                | { type?: string; [k: string]: unknown }
+                | undefined;
+              if (!ev) break;
+
+              switch (ev.type) {
+                case "content_block_start": {
+                  const cb = ev.content_block as
+                    | { type?: string; id?: string; name?: string }
+                    | undefined;
+                  if (!cb) break;
+                  const absIdx = turnStart + (ev.index as number);
+                  turnCount = Math.max(turnCount, (ev.index as number) + 1);
+
+                  if (cb.type === "thinking") {
+                    const b: GuiThinkingBlock = {
+                      type: "thinking",
+                      thinking: "",
+                    };
+                    contentBlocks[absIdx] = b;
+                    emitDelta(absIdx, { type: "block_added", block: b });
+                  } else if (cb.type === "text") {
+                    const b: import("../shared/contracts").GuiTextBlock = {
+                      type: "text",
+                      text: "",
+                    };
+                    contentBlocks[absIdx] = b;
+                    emitDelta(absIdx, { type: "block_added", block: b });
+                  } else if (cb.type === "tool_use") {
+                    const isMcp =
+                      typeof cb.name === "string" && cb.name.includes("__");
+                    const b: GuiToolUseBlock = {
+                      type: "tool_use",
+                      id: cb.id ?? "",
+                      name: cb.name ?? "",
+                      input: {},
+                      status: "pending",
+                      isMcp,
+                    };
+                    contentBlocks[absIdx] = b;
+                    if (cb.id) toolUseIdToIdx.set(cb.id, absIdx);
+                    emitDelta(absIdx, { type: "block_added", block: b });
+                  }
+                  break;
+                }
+
+                case "content_block_delta": {
+                  const absIdx = turnStart + (ev.index as number);
+                  const existing = contentBlocks[absIdx];
+                  if (!existing) break;
+                  const d = ev.delta as
+                    | {
+                        type?: string;
+                        text?: string;
+                        thinking?: string;
+                        partial_json?: string;
+                      }
+                    | undefined;
+                  if (!d) break;
+
+                  if (
+                    d.type === "text_delta" &&
+                    existing.type === "text" &&
+                    d.text
+                  ) {
+                    existing.text += d.text;
+                    emitDelta(absIdx, { type: "text_delta", text: d.text });
+                  } else if (
+                    d.type === "thinking_delta" &&
+                    existing.type === "thinking" &&
+                    d.thinking
+                  ) {
+                    existing.thinking += d.thinking;
+                    emitDelta(absIdx, {
+                      type: "thinking_delta",
+                      thinking: d.thinking,
+                    });
+                  } else if (
+                    d.type === "input_json_delta" &&
+                    existing.type === "tool_use" &&
+                    d.partial_json
+                  ) {
+                    (
+                      existing as GuiToolUseBlock & { _inputJson?: string }
+                    )._inputJson =
+                      ((existing as GuiToolUseBlock & { _inputJson?: string })
+                        ._inputJson ?? "") + d.partial_json;
+                  }
+                  break;
+                }
+
+                case "content_block_stop": {
+                  const absIdx = turnStart + (ev.index as number);
+                  const existing = contentBlocks[absIdx];
+                  if (existing?.type === "tool_use") {
+                    const tb = existing as GuiToolUseBlock & {
+                      _inputJson?: string;
+                    };
+                    if (tb._inputJson) {
+                      try {
+                        tb.input = JSON.parse(tb._inputJson) as Record<
+                          string,
+                          unknown
+                        >;
+                      } catch {
+                        // keep empty input on parse failure
+                      }
+                      delete tb._inputJson;
+                      emitDelta(absIdx, {
+                        type: "block_added",
+                        block: { ...tb },
+                      });
+                    }
+                  }
+                  break;
+                }
+
+                case "message_stop": {
+                  // Advance the block index offset to the next turn.
+                  turnStart += turnCount;
+                  turnCount = 0;
+                  break;
+                }
+              }
+              break;
             }
 
-            try {
-              const payload = JSON.parse(trimmedStdout) as {
-                result?: string;
-                errors?: string[];
-                is_error?: boolean;
-              };
-              const errors = payload.errors?.filter(Boolean) ?? [];
-              const outputText =
-                payload.result?.trim() ||
-                errors.join("\n") ||
-                trimmedStderr ||
-                "模型没有返回可展示的内容。";
+            // ── tool running progress ────────────────────────────────────────
+            case "tool_progress": {
+              const toolUseId = msg.tool_use_id as string | undefined;
+              if (!toolUseId) break;
+              const idx = toolUseIdToIdx.get(toolUseId);
+              if (idx === undefined) break;
+              const tb = contentBlocks[idx] as GuiToolUseBlock | undefined;
+              if (!tb) break;
+              tb.status = "running";
+              emitDelta(idx, { type: "tool_status", status: "running" });
+              break;
+            }
+
+            // ── tool results arrive as user messages ─────────────────────────
+            case "user": {
+              const m = msg.message as
+                | {
+                    content?: Array<{
+                      type?: string;
+                      tool_use_id?: string;
+                      content?: unknown;
+                      is_error?: boolean;
+                    }>;
+                  }
+                | undefined;
+              for (const block of m?.content ?? []) {
+                if (block.type === "tool_result" && block.tool_use_id) {
+                  const idx = toolUseIdToIdx.get(block.tool_use_id);
+                  if (idx === undefined) continue;
+                  const tb = contentBlocks[idx] as GuiToolUseBlock | undefined;
+                  if (!tb) continue;
+                  const contentStr =
+                    typeof block.content === "string"
+                      ? block.content
+                      : Array.isArray(block.content)
+                        ? (block.content as Array<{ text?: string }>)
+                            .map((c) => c.text ?? "")
+                            .join("")
+                        : "";
+                  const result: GuiToolResultPayload = {
+                    isError: block.is_error ?? false,
+                    content: contentStr,
+                  };
+                  tb.status = block.is_error ? "error" : "completed";
+                  tb.result = result;
+                  emitDelta(idx, { type: "tool_status", status: tb.status });
+                  emitDelta(idx, { type: "tool_result", result });
+                }
+              }
+              break;
+            }
+
+            // ── final result ─────────────────────────────────────────────────
+            case "result": {
+              const u = msg.usage as
+                | {
+                    input_tokens?: number;
+                    output_tokens?: number;
+                    cache_creation_input_tokens?: number;
+                    cache_read_input_tokens?: number;
+                  }
+                | undefined;
+              finalOutputText = (msg.result as string | undefined) ?? "";
+              finalIsError = (msg.is_error as boolean | undefined) ?? false;
+              finalDurationMs = msg.duration_ms as number | undefined;
+              if (u) {
+                finalUsage = {
+                  inputTokens: u.input_tokens ?? 0,
+                  outputTokens: u.output_tokens ?? 0,
+                  cacheCreationInputTokens: u.cache_creation_input_tokens,
+                  cacheReadInputTokens: u.cache_read_input_tokens,
+                  costUsd: msg.total_cost_usd as number | undefined,
+                };
+              }
+              // Finalize any tool_use blocks still stuck in pending/running state.
+              for (let i = 0; i < contentBlocks.length; i++) {
+                const tb = contentBlocks[i];
+                if (
+                  tb?.type === "tool_use" &&
+                  (tb.status === "pending" || tb.status === "running")
+                ) {
+                  tb.status = "completed";
+                  emitDelta(i, { type: "tool_status", status: "completed" });
+                }
+              }
+              break;
+            }
+          }
+        };
+
+        child.stdout.on("data", (chunk: Buffer) => {
+          lineBuffer += chunk.toString();
+          const lines = lineBuffer.split("\n");
+          lineBuffer = lines.pop() ?? "";
+          for (const line of lines) {
+            processLine(line.trim());
+          }
+        });
+        child.stderr.on("data", (chunk: Buffer) => {
+          const text = chunk.toString();
+          stderr += text;
+          // Forward CLI stderr to main process stderr so it's visible in dev terminal.
+          process.stderr.write(`[GUI-CLI-STDERR] ${text}`);
+        });
+        child.on("error", (error) => {
+          settleOnce(() => reject(error));
+        });
+        child.on("close", (exitCode) => {
+          // Flush any remaining buffered line.
+          if (lineBuffer.trim()) processLine(lineBuffer.trim());
+          console.log(
+            `[GUI-DEBUG] child closed exitCode=${exitCode} totalLines=${_debugLineCount} blocks=${contentBlocks.filter(Boolean).length} hasFinalText=${finalOutputText !== null}`,
+          );
+
+          settleOnce(() => {
+            if (finalOutputText !== null) {
               resolve({
-                outputText,
-                isError: Boolean(payload.is_error),
+                outputText: finalOutputText,
+                isError: finalIsError,
+                blocks: contentBlocks.filter((b) => b != null),
+                usage: finalUsage,
+                durationMs: finalDurationMs,
               });
-            } catch (error) {
+            } else {
+              const trimmedStderr = stderr.trim();
               reject(
                 new Error(
                   trimmedStderr ||
-                    (error instanceof Error
-                      ? error.message
-                      : "GUI 对话结果解析失败。"),
+                    `GUI 对话进程未返回结果（exit ${String(exitCode)}）。`,
                 ),
               );
             }
@@ -635,7 +919,9 @@ async function loadCurrentSkillSnapshot() {
 
 async function requireSkillRecord(skillRoot: string): Promise<SkillRecord> {
   const snapshot = await loadCurrentSkillSnapshot();
-  const skill = snapshot.skills.find((candidate) => candidate.skillRoot === skillRoot);
+  const skill = snapshot.skills.find(
+    (candidate) => candidate.skillRoot === skillRoot,
+  );
   if (!skill) {
     throw new Error("未找到目标 Skill，列表可能已过期，请刷新后重试。");
   }
@@ -644,7 +930,10 @@ async function requireSkillRecord(skillRoot: string): Promise<SkillRecord> {
 }
 
 function getPreferredPersonalSkillRoot() {
-  return getDefaultPersonalSkillRoots()[0] ?? join(app.getPath("home"), ".agents", "skills");
+  return (
+    getDefaultPersonalSkillRoots()[0] ??
+    join(app.getPath("home"), ".agents", "skills")
+  );
 }
 
 function registerIpcHandlers() {
@@ -658,12 +947,18 @@ function registerIpcHandlers() {
       return getAppearanceSettingsStore().save(settings);
     },
   );
-  ipcMain.handle("provider-settings:get", (): DesktopProviderSettingsSnapshot => {
-    return getProviderSettingsStore().getSnapshot();
-  });
+  ipcMain.handle(
+    "provider-settings:get",
+    (): DesktopProviderSettingsSnapshot => {
+      return getProviderSettingsStore().getSnapshot();
+    },
+  );
   ipcMain.handle(
     "provider-settings:save",
-    (_event, settings: DesktopProviderSettingsSaveInput): DesktopProviderSettingsSnapshot => {
+    (
+      _event,
+      settings: DesktopProviderSettingsSaveInput,
+    ): DesktopProviderSettingsSnapshot => {
       return getProviderSettingsStore().save(settings).snapshot;
     },
   );
@@ -672,16 +967,25 @@ function registerIpcHandlers() {
   });
   ipcMain.handle(
     "mcp-settings:save",
-    (_event, settings: DesktopMcpServerSaveInput): DesktopMcpSettingsSnapshot => {
+    (
+      _event,
+      settings: DesktopMcpServerSaveInput,
+    ): DesktopMcpSettingsSnapshot => {
       return getMcpSettingsStore().save(settings);
     },
   );
-  ipcMain.handle("mcp-settings:remove", (_event, name: string): DesktopMcpSettingsSnapshot => {
-    return getMcpSettingsStore().remove(name);
-  });
+  ipcMain.handle(
+    "mcp-settings:remove",
+    (_event, name: string): DesktopMcpSettingsSnapshot => {
+      return getMcpSettingsStore().remove(name);
+    },
+  );
   ipcMain.handle(
     "mcp-settings:toggle",
-    (_event, settings: DesktopMcpServerToggleInput): DesktopMcpSettingsSnapshot => {
+    (
+      _event,
+      settings: DesktopMcpServerToggleInput,
+    ): DesktopMcpSettingsSnapshot => {
       return getMcpSettingsStore().toggle(settings);
     },
   );
@@ -743,7 +1047,10 @@ function registerIpcHandlers() {
       const skillDirectoryName = getSkillDirectoryName(skill.skillRoot);
       const result = await dialog.showSaveDialog(mainWindow, {
         title: `下载 ${skill.displayName}`,
-        defaultPath: join(app.getPath("downloads"), `${skillDirectoryName}.zip`),
+        defaultPath: join(
+          app.getPath("downloads"),
+          `${skillDirectoryName}.zip`,
+        ),
         filters: [
           {
             name: "ZIP archive",
@@ -798,72 +1105,75 @@ function registerIpcHandlers() {
       };
     },
   );
-  ipcMain.handle(
-    "skills:upload",
-    async (): Promise<SkillUploadResult> => {
-      if (!mainWindow) {
-        throw new Error("主窗口不可用。");
-      }
+  ipcMain.handle("skills:upload", async (): Promise<SkillUploadResult> => {
+    if (!mainWindow) {
+      throw new Error("主窗口不可用。");
+    }
 
-      const result = await dialog.showOpenDialog(mainWindow, {
-        title: "上传 Skill",
-        properties: ["openFile"],
-        filters: [
-          {
-            name: "ZIP archive",
-            extensions: ["zip"],
-          },
-        ],
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: "上传 Skill",
+      properties: ["openFile"],
+      filters: [
+        {
+          name: "ZIP archive",
+          extensions: ["zip"],
+        },
+      ],
+    });
+
+    if (result.canceled || !result.filePaths[0]) {
+      return {
+        cancelled: true,
+        snapshot: null,
+      };
+    }
+
+    const { skillDirectoryName } = await inspectUploadedSkillArchive(
+      result.filePaths[0],
+    );
+    const existingSnapshot = await loadCurrentSkillSnapshot();
+    const existingSkill = existingSnapshot.skills.find(
+      (skill) =>
+        skill.sourceKind === "personal" &&
+        getSkillDirectoryName(skill.skillRoot) === skillDirectoryName,
+    );
+    const destinationRoot = existingSkill
+      ? dirname(existingSkill.skillRoot)
+      : getPreferredPersonalSkillRoot();
+
+    let overwrite = false;
+    if (existingSkill) {
+      const confirmation = await dialog.showMessageBox(mainWindow, {
+        type: "warning",
+        buttons: ["取消", "覆盖"],
+        defaultId: 0,
+        cancelId: 0,
+        title: `覆盖 ${skillDirectoryName}`,
+        message: `已存在同名 Skill：${skillDirectoryName}`,
+        detail: "继续后会使用上传的压缩包覆盖现有 Skill。",
       });
 
-      if (result.canceled || !result.filePaths[0]) {
+      if (confirmation.response !== 1) {
         return {
           cancelled: true,
           snapshot: null,
         };
       }
 
-      const { skillDirectoryName } = await inspectUploadedSkillArchive(result.filePaths[0]);
-      const existingSnapshot = await loadCurrentSkillSnapshot();
-      const existingSkill = existingSnapshot.skills.find(
-        (skill) =>
-          skill.sourceKind === "personal" &&
-          getSkillDirectoryName(skill.skillRoot) === skillDirectoryName,
-      );
-      const destinationRoot = existingSkill
-        ? dirname(existingSkill.skillRoot)
-        : getPreferredPersonalSkillRoot();
+      overwrite = true;
+    }
 
-      let overwrite = false;
-      if (existingSkill) {
-        const confirmation = await dialog.showMessageBox(mainWindow, {
-          type: "warning",
-          buttons: ["取消", "覆盖"],
-          defaultId: 0,
-          cancelId: 0,
-          title: `覆盖 ${skillDirectoryName}`,
-          message: `已存在同名 Skill：${skillDirectoryName}`,
-          detail: "继续后会使用上传的压缩包覆盖现有 Skill。",
-        });
+    await installSkillFromArchive(
+      destinationRoot,
+      result.filePaths[0],
+      overwrite,
+    );
 
-        if (confirmation.response !== 1) {
-          return {
-            cancelled: true,
-            snapshot: null,
-          };
-        }
-
-        overwrite = true;
-      }
-
-      await installSkillFromArchive(destinationRoot, result.filePaths[0], overwrite);
-
-      return {
-        cancelled: false,
-        snapshot: await loadCurrentSkillSnapshot(),
-      };
-    },
-  );
+    return {
+      cancelled: false,
+      snapshot: await loadCurrentSkillSnapshot(),
+    };
+  });
   ipcMain.handle(
     "skills:get-remote-catalog",
     async (): Promise<RemoteSkillCatalog> => {
@@ -925,7 +1235,8 @@ function registerIpcHandlers() {
     } catch (error) {
       emitToRenderer("voice-dictation:progress", {
         stage: "error",
-        message: error instanceof Error ? error.message : "准备离线语音模型失败。",
+        message:
+          error instanceof Error ? error.message : "准备离线语音模型失败。",
         percent: null,
       });
       throw error;
@@ -938,13 +1249,18 @@ function registerIpcHandlers() {
       input: VoiceDictationTranscriptionInput,
     ): Promise<VoiceDictationTranscriptionResult> => {
       try {
-        return await transcribeVoiceDictation(app.getPath("userData"), input, (payload) => {
-          emitToRenderer("voice-dictation:progress", payload);
-        });
+        return await transcribeVoiceDictation(
+          app.getPath("userData"),
+          input,
+          (payload) => {
+            emitToRenderer("voice-dictation:progress", payload);
+          },
+        );
       } catch (error) {
         emitToRenderer("voice-dictation:progress", {
           stage: "error",
-          message: error instanceof Error ? error.message : "离线语音转写失败。",
+          message:
+            error instanceof Error ? error.message : "离线语音转写失败。",
           percent: null,
         });
         throw error;
@@ -952,7 +1268,9 @@ function registerIpcHandlers() {
     },
   );
   ipcMain.handle("voice-dictation:open-models-directory", async () => {
-    const modelsDirectory = getVoiceDictationModelsRoot(app.getPath("userData"));
+    const modelsDirectory = getVoiceDictationModelsRoot(
+      app.getPath("userData"),
+    );
     if (!existsSync(modelsDirectory)) {
       await dialog.showMessageBox({
         type: "info",
@@ -969,61 +1287,95 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle("sidebar:open-worktree", (_event, projectPath: string): SidebarStateSnapshot => {
-    return getWorktreeStateStore().openWorktree(projectPath);
-  });
+  ipcMain.handle(
+    "sidebar:open-worktree",
+    (_event, projectPath: string): SidebarStateSnapshot => {
+      return getWorktreeStateStore().openWorktree(projectPath);
+    },
+  );
 
-  ipcMain.handle("sidebar:pick-and-open-worktree", async (): Promise<SidebarStateSnapshot | null> => {
-    if (!mainWindow) {
-      return null;
-    }
-
-    const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ["openDirectory", "createDirectory"],
-    });
-
-    if (result.canceled || !result.filePaths[0]) {
-      return null;
-    }
-
-    return getWorktreeStateStore().openWorktree(result.filePaths[0]);
-  });
-
-  ipcMain.handle("sidebar:select-worktree", (_event, worktreeId: string): SidebarStateSnapshot => {
-    return getWorktreeStateStore().selectWorktree(worktreeId);
-  });
-
-  ipcMain.handle("sidebar:remove-worktree", (_event, worktreeId: string): SidebarStateSnapshot => {
-    const snapshot = getWorktreeStateStore().getSnapshot();
-    const worktree = snapshot.worktrees.find((entry) => entry.id === worktreeId) ?? null;
-    if (worktree) {
-      for (const session of worktree.sessions) {
-        getGuiConversationStore().deleteConversation(session.id);
+  ipcMain.handle(
+    "sidebar:pick-and-open-worktree",
+    async (): Promise<SidebarStateSnapshot | null> => {
+      if (!mainWindow) {
+        return null;
       }
-    }
-    return getWorktreeStateStore().removeWorktree(worktreeId);
-  });
 
-  ipcMain.handle("sidebar:prepare-session", (_event, worktreeId: string): SidebarStateSnapshot => {
-    return getWorktreeStateStore().prepareSession(worktreeId);
-  });
+      const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ["openDirectory", "createDirectory"],
+      });
 
-  ipcMain.handle("sidebar:create-session", (_event, input: SessionCreateInput): SidebarStateSnapshot => {
-    return getWorktreeStateStore().createSession(input.worktreeId, input.title ?? null);
-  });
+      if (result.canceled || !result.filePaths[0]) {
+        return null;
+      }
+
+      return getWorktreeStateStore().openWorktree(result.filePaths[0]);
+    },
+  );
+
+  ipcMain.handle(
+    "sidebar:select-worktree",
+    (_event, worktreeId: string): SidebarStateSnapshot => {
+      return getWorktreeStateStore().selectWorktree(worktreeId);
+    },
+  );
+
+  ipcMain.handle(
+    "sidebar:remove-worktree",
+    (_event, worktreeId: string): SidebarStateSnapshot => {
+      const snapshot = getWorktreeStateStore().getSnapshot();
+      const worktree =
+        snapshot.worktrees.find((entry) => entry.id === worktreeId) ?? null;
+      if (worktree) {
+        for (const session of worktree.sessions) {
+          getGuiConversationStore().deleteConversation(session.id);
+        }
+      }
+      return getWorktreeStateStore().removeWorktree(worktreeId);
+    },
+  );
+
+  ipcMain.handle(
+    "sidebar:prepare-session",
+    (_event, worktreeId: string): SidebarStateSnapshot => {
+      return getWorktreeStateStore().prepareSession(worktreeId);
+    },
+  );
+
+  ipcMain.handle(
+    "sidebar:create-session",
+    (_event, input: SessionCreateInput): SidebarStateSnapshot => {
+      return getWorktreeStateStore().createSession(
+        input.worktreeId,
+        input.title ?? null,
+      );
+    },
+  );
 
   ipcMain.handle(
     "sidebar:select-session",
-    (_event, payload: { worktreeId: string; sessionId: string }): SidebarStateSnapshot => {
-      return getWorktreeStateStore().selectSession(payload.worktreeId, payload.sessionId);
+    (
+      _event,
+      payload: { worktreeId: string; sessionId: string },
+    ): SidebarStateSnapshot => {
+      return getWorktreeStateStore().selectSession(
+        payload.worktreeId,
+        payload.sessionId,
+      );
     },
   );
 
   ipcMain.handle(
     "sidebar:remove-session",
-    (_event, payload: { worktreeId: string; sessionId: string }): SidebarStateSnapshot => {
+    (
+      _event,
+      payload: { worktreeId: string; sessionId: string },
+    ): SidebarStateSnapshot => {
       getGuiConversationStore().deleteConversation(payload.sessionId);
-      return getWorktreeStateStore().removeSession(payload.worktreeId, payload.sessionId);
+      return getWorktreeStateStore().removeSession(
+        payload.worktreeId,
+        payload.sessionId,
+      );
     },
   );
   ipcMain.handle(
@@ -1034,7 +1386,10 @@ function registerIpcHandlers() {
   );
   ipcMain.handle(
     "gui-conversation:send",
-    async (_event, input: DesktopGuiConversationSendInput): Promise<DesktopGuiConversationSnapshot> => {
+    async (
+      _event,
+      input: DesktopGuiConversationSendInput,
+    ): Promise<DesktopGuiConversationSnapshot> => {
       return await getGuiConversationStore().submitMessage(input);
     },
   );
@@ -1066,22 +1421,25 @@ function registerIpcHandlers() {
     return createTerminalSession(input);
   });
 
-  ipcMain.handle("terminal:write", (_event, payload: { sessionId: string; data: string }) => {
-    const session = terminalSessions.get(payload.sessionId);
-    if (!session) {
+  ipcMain.handle(
+    "terminal:write",
+    (_event, payload: { sessionId: string; data: string }) => {
+      const session = terminalSessions.get(payload.sessionId);
+      if (!session) {
+        writeDesktopTerminalDebug(
+          "terminal-write",
+          `session=${payload.sessionId} dropped bytes=${payload.data.length}`,
+        );
+        return;
+      }
+
       writeDesktopTerminalDebug(
         "terminal-write",
-        `session=${payload.sessionId} dropped bytes=${payload.data.length}`,
+        `session=${payload.sessionId} bytes=${payload.data.length} preview=${JSON.stringify(payload.data.slice(0, 160))}`,
       );
-      return;
-    }
-
-    writeDesktopTerminalDebug(
-      "terminal-write",
-      `session=${payload.sessionId} bytes=${payload.data.length} preview=${JSON.stringify(payload.data.slice(0, 160))}`,
-    );
-    session.process.write(payload.data);
-  });
+      session.process.write(payload.data);
+    },
+  );
 
   ipcMain.handle("terminal:close", (_event, sessionId: string) => {
     closeTerminalSession(sessionId);
@@ -1100,7 +1458,8 @@ async function createMainWindow() {
     backgroundColor: "#0b1018",
     icon: iconPath ?? undefined,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    trafficLightPosition: process.platform === "darwin" ? { x: 18, y: 16 } : undefined,
+    trafficLightPosition:
+      process.platform === "darwin" ? { x: 18, y: 16 } : undefined,
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,

@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { marked } from "marked";
-import xss from "xss";
-import { getDefaultWhiteList } from "xss";
-import type { DesktopGuiConversationSnapshot } from "../../../../shared/contracts";
+import { useEffect, useRef } from "react";
+import type {
+  DesktopGuiConversationMessage,
+  DesktopGuiConversationSnapshot,
+} from "../../../../shared/contracts";
 import { cn } from "@renderer/lib/cn";
+import { BlockRenderer } from "./block-renderer";
+import { StreamingMarkdown } from "./streaming-markdown";
+import { PendingIndicator } from "./blocks/pending-indicator";
+import { MessageFooter } from "./blocks/message-footer";
 
 interface WorkspaceConversationProps {
   snapshot: DesktopGuiConversationSnapshot | null;
@@ -15,69 +19,9 @@ export function WorkspaceConversation({
   isLoading,
 }: WorkspaceConversationProps) {
   const bottomAnchorRef = useRef<HTMLDivElement | null>(null);
-  const seenAssistantIdsRef = useRef<Set<string>>(new Set());
-  const streamTimerRef = useRef<number | null>(null);
-  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(
-    null,
-  );
-  const [streamingVisibleText, setStreamingVisibleText] = useState("");
 
   useEffect(() => {
-    return () => {
-      if (streamTimerRef.current !== null) {
-        window.clearInterval(streamTimerRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!snapshot?.messages?.length) {
-      return;
-    }
-
-    const completedAssistants = snapshot.messages.filter(
-      (message) =>
-        message.role === "assistant" && message.status === "completed",
-    );
-    const newestCompleted = completedAssistants.at(-1);
-
-    if (!newestCompleted) {
-      return;
-    }
-
-    if (seenAssistantIdsRef.current.has(newestCompleted.id)) {
-      return;
-    }
-
-    seenAssistantIdsRef.current.add(newestCompleted.id);
-
-    const target = newestCompleted.text.trim() || "模型没有返回可展示的内容。";
-    setStreamingMessageId(newestCompleted.id);
-    setStreamingVisibleText("");
-
-    if (streamTimerRef.current !== null) {
-      window.clearInterval(streamTimerRef.current);
-    }
-
-    let index = 0;
-    streamTimerRef.current = window.setInterval(() => {
-      index = Math.min(target.length, index + 3);
-      setStreamingVisibleText(target.slice(0, index));
-
-      if (index >= target.length) {
-        if (streamTimerRef.current !== null) {
-          window.clearInterval(streamTimerRef.current);
-        }
-        streamTimerRef.current = null;
-        setStreamingMessageId(null);
-      }
-    }, 16);
-  }, [snapshot]);
-
-  useEffect(() => {
-    bottomAnchorRef.current?.scrollIntoView({
-      block: "end",
-    });
+    bottomAnchorRef.current?.scrollIntoView({ block: "end" });
   }, [snapshot]);
 
   if (isLoading) {
@@ -96,94 +40,108 @@ export function WorkspaceConversation({
 
   return (
     <div className="mx-auto flex h-full w-full max-w-[920px] flex-col py-2">
-      <div className="flex w-full flex-col gap-4 pb-6">
-        {snapshot.messages.map((message) => {
-          const isAssistant = message.role === "assistant";
-          const isPending = message.status === "pending";
-          const isError = message.status === "error";
-          const shouldStreamThisMessage =
-            isAssistant && message.id === streamingMessageId;
-          const body = isPending
-            ? ""
-            : shouldStreamThisMessage
-              ? streamingVisibleText
-              : message.text.trim() || "模型没有返回可展示的内容。";
-
-          return (
-            <div
-              key={message.id}
-              className={cn(
-                "flex w-full",
-                isAssistant ? "justify-start" : "justify-end",
-              )}
-            >
-              <div
-                className={cn(
-                  "max-w-[min(88%,46rem)] rounded-[22px] px-4 py-3 text-[14px] leading-7",
-                  isAssistant
-                    ? "bg-transparent text-[var(--color-fg)]"
-                    : "bg-[var(--color-surface-strong)] text-[var(--color-fg)]",
-                  isError &&
-                    "border-[rgba(239,68,68,0.24)] bg-[rgba(239,68,68,0.08)] text-[var(--color-fg)]",
-                  isPending && "text-[var(--color-muted)]",
-                )}
-              >
-                {isPending ? (
-                  <ThinkingState />
-                ) : isAssistant ? (
-                  <GuiMarkdownMessage text={body} />
-                ) : (
-                  <div className="whitespace-pre-wrap break-words">{body}</div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+      <div className="flex w-full flex-col gap-5 pb-6">
+        {snapshot.messages.map((message) => (
+          <MessageRow key={message.id} message={message} />
+        ))}
         <div ref={bottomAnchorRef} />
       </div>
     </div>
   );
 }
 
-const guiMarkdownWhitelist = {
-  ...getDefaultWhiteList(),
-  table: ["class"],
-  thead: ["class"],
-  tbody: ["class"],
-  tr: ["class"],
-  th: ["class", "colspan", "rowspan", "align"],
-  td: ["class", "colspan", "rowspan", "align"],
-};
+// ─── MessageRow ───────────────────────────────────────────────────────────────
 
-function GuiMarkdownMessage({ text }: { text: string }) {
-  const html = useMemo(() => {
-    const rendered = marked.parse(text, {
-      async: false,
-      gfm: true,
-      breaks: true,
-    }) as string;
-    return xss(rendered, {
-      whiteList: guiMarkdownWhitelist,
-    });
-  }, [text]);
+interface MessageRowProps {
+  message: DesktopGuiConversationMessage;
+}
 
+function MessageRow({ message }: MessageRowProps) {
+  if (message.role === "user") {
+    return <UserMessageBubble message={message} />;
+  }
+  return <AssistantMessageRow message={message} />;
+}
+
+// ─── User bubble ──────────────────────────────────────────────────────────────
+
+function UserMessageBubble({
+  message,
+}: {
+  message: DesktopGuiConversationMessage;
+}) {
   return (
-    <article
-      className="gui-markdown"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
+    <div className="flex w-full justify-end">
+      <div
+        className={cn(
+          "max-w-[min(85%,44rem)] rounded-[20px] rounded-br-[6px]",
+          "bg-[var(--color-surface-strong)] px-4 py-3",
+          "text-[14px] leading-7 text-[var(--color-fg)]",
+          "whitespace-pre-wrap break-words",
+        )}
+      >
+        {message.text}
+      </div>
+    </div>
   );
 }
 
-function ThinkingState() {
+// ─── Assistant row ────────────────────────────────────────────────────────────
+
+function AssistantMessageRow({
+  message,
+}: {
+  message: DesktopGuiConversationMessage;
+}) {
+  const isPending = message.status === "pending";
+  const isError = message.status === "error";
+
   return (
-    <div className="flex items-center gap-2 text-[13px] font-medium text-[var(--color-muted)]">
-      <span>Thinking</span>
-      <span className="inline-flex items-center gap-1" aria-hidden="true">
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--color-muted)] [animation-delay:0ms]" />
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--color-muted)] [animation-delay:120ms]" />
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--color-muted)] [animation-delay:240ms]" />
-      </span>
+    <div className="flex w-full justify-start">
+      <div
+        className={cn(
+          "w-full max-w-[760px] text-[14px] leading-7 text-[var(--color-fg)]",
+          isError &&
+            "rounded-xl border border-red-500/20 bg-red-500/6 px-4 py-3",
+        )}
+      >
+        {isPending && (!message.blocks || message.blocks.length === 0) ? (
+          <PendingIndicator />
+        ) : message.blocks && message.blocks.length > 0 ? (
+          <AssistantBlockList message={message} />
+        ) : (
+          <LegacyAssistantText message={message} />
+        )}
+        {!isPending && <MessageFooter message={message} />}
+      </div>
     </div>
   );
+}
+
+// ─── Block list (new format) ──────────────────────────────────────────────────
+
+function AssistantBlockList({
+  message,
+}: {
+  message: DesktopGuiConversationMessage;
+}) {
+  const isStreaming = message.status === "pending";
+  return (
+    <div className="flex flex-col gap-3">
+      {message.blocks!.map((block, i) => (
+        <BlockRenderer key={i} block={block} isStreaming={isStreaming} />
+      ))}
+    </div>
+  );
+}
+
+// ─── Legacy text fallback ─────────────────────────────────────────────────────
+
+function LegacyAssistantText({
+  message,
+}: {
+  message: DesktopGuiConversationMessage;
+}) {
+  const text = message.text.trim() || "模型没有返回可展示的内容。";
+  return <StreamingMarkdown text={text} />;
 }

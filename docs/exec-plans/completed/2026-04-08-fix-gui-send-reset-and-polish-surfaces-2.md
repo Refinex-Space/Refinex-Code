@@ -1,3 +1,8 @@
+> ✅ Completed: 2026-04-08
+> Summary: 修复 GUI 发送后输入框未即时清空的问题，增强 toggle/composer 玻璃质感，新增回到底部按钮，所有 smoke 测试通过
+> Duration: TBD
+> Key learnings: TBD
+
 # fix gui send reset and polish surfaces
 
 ## Metadata

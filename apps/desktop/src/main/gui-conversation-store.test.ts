@@ -61,23 +61,29 @@ describe("createGuiConversationStore", () => {
     expect(first.messages[1]?.text).toBe("第一次响应");
     expect(second.messages).toHaveLength(4);
     expect(second.messages[3]?.text).toBe("第二次响应");
-    expect(runConversation).toHaveBeenNthCalledWith(1, {
-      cliSessionId: "22222222-2222-4222-8222-222222222222",
-      resume: false,
-      worktreePath: root,
-      prompt: "你好",
-      providerId: "anthropic",
-      model: "claude-sonnet-4-6",
-      effort: "high",
-    });
-    expect(runConversation).toHaveBeenNthCalledWith(2, {
-      cliSessionId: "22222222-2222-4222-8222-222222222222",
-      resume: true,
-      worktreePath: root,
-      prompt: "继续",
-      providerId: "codex",
-      model: "gpt-5.4",
-      effort: "medium",
-    });
+    expect(runConversation).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        cliSessionId: "22222222-2222-4222-8222-222222222222",
+        resume: false,
+        worktreePath: root,
+        prompt: "你好",
+        providerId: "anthropic",
+        model: "claude-sonnet-4-6",
+        effort: "high",
+      }),
+    );
+    expect(runConversation).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        cliSessionId: "22222222-2222-4222-8222-222222222222",
+        resume: true,
+        worktreePath: root,
+        prompt: "继续",
+        providerId: "codex",
+        model: "gpt-5.4",
+        effort: "medium",
+      }),
+    );
   });
 });

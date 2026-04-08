@@ -1,10 +1,20 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import type {
   DesktopGuiConversationMessage,
   DesktopGuiConversationSendInput,
   DesktopGuiConversationSnapshot,
+  GuiBlockDelta,
+  GuiContentBlock,
+  GuiMessageUsage,
 } from "../shared/contracts";
 
 interface StoredGuiConversationSnapshot extends DesktopGuiConversationSnapshot {
@@ -14,17 +24,26 @@ interface StoredGuiConversationSnapshot extends DesktopGuiConversationSnapshot {
 
 interface GuiConversationRunnerInput {
   cliSessionId: string;
+  /** GUI session ID (not CLI session ID). Used for IPC targeting. */
+  guiSessionId: string;
+  /** ID of the assistant message being populated. */
+  messageId: string;
   resume: boolean;
   worktreePath: string;
   prompt: string;
   providerId: DesktopGuiConversationSendInput["providerId"];
   model: string;
   effort: DesktopGuiConversationSendInput["effort"];
+  /** Called for each streaming block delta. */
+  onDelta: (blockIndex: number, delta: GuiBlockDelta) => void;
 }
 
 interface GuiConversationRunnerResult {
   outputText: string;
   isError: boolean;
+  blocks?: GuiContentBlock[];
+  usage?: GuiMessageUsage;
+  durationMs?: number;
 }
 
 interface CreateGuiConversationStoreOptions {
@@ -117,7 +136,9 @@ export function createGuiConversationStore({
     return join(storageRoot, `${sessionId}.json`);
   }
 
-  function createEmptySnapshot(sessionId: string): StoredGuiConversationSnapshot {
+  function createEmptySnapshot(
+    sessionId: string,
+  ): StoredGuiConversationSnapshot {
     const createdAt = now().toISOString();
     return {
       version: 1,
@@ -204,15 +225,23 @@ export function createGuiConversationStore({
     };
     writeSnapshot(nextSnapshot);
 
+    const assistantMessage =
+      nextSnapshot.messages[nextSnapshot.messages.length - 1]!;
+
     try {
       const result = await runConversation({
         cliSessionId: snapshot.cliSessionId,
+        guiSessionId: input.sessionId,
+        messageId: assistantMessage.id,
         resume: snapshot.messages.length > 0,
         worktreePath: input.worktreePath,
         prompt,
         providerId: input.providerId,
         model: input.model,
         effort: input.effort,
+        onDelta: () => {
+          // IPC emission is handled inside runConversation (in index.ts).
+        },
       });
 
       const assistantIndex = nextSnapshot.messages.length - 1;
@@ -224,6 +253,9 @@ export function createGuiConversationStore({
                 ...message,
                 status: result.isError ? "error" : "completed",
                 text: result.outputText,
+                blocks: result.blocks,
+                usage: result.usage,
+                durationMs: result.durationMs,
               }
             : message,
         ),
@@ -241,9 +273,7 @@ export function createGuiConversationStore({
                 ...message,
                 status: "error",
                 text:
-                  error instanceof Error
-                    ? error.message
-                    : "GUI 对话请求失败。",
+                  error instanceof Error ? error.message : "GUI 对话请求失败。",
               }
             : message,
         ),

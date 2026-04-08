@@ -12,7 +12,18 @@
 
 ## Active Plan Entry Points
 
-- No active plans
+> 暂无进行中计划。
+
+## Recently Completed
+
+### Desktop GUI AI Response Panel（响应交互面板）
+
+目标：为 Refinex-Code Desktop 设计并实现生产级 AI 响应交互面板，覆盖流式 Markdown、工具调用、差异审批、子代理可视化等全部 CLI 输出类型。
+
+- [Phase A — Data Model & Type System](exec-plans/completed/2026-04-08-desktop-gui-response-panel-phase-a-data-model.md) ✅ Completed
+- [Phase B — Message Renderer Components](exec-plans/completed/2026-04-08-desktop-gui-response-panel-phase-b-message-renderer.md) ✅ Completed
+- [Phase C — Tool Components](exec-plans/completed/2026-04-08-desktop-gui-response-panel-phase-c-tool-components.md) ✅ Completed
+- [Phase D — Advanced Features](exec-plans/completed/2026-04-08-desktop-gui-response-panel-phase-d-advanced.md) ✅ Completed
 
 ## Rules
 

@@ -211,10 +211,170 @@ export type DesktopGuiConversationMessageStatus =
   | "pending"
   | "error";
 
+// ─── GUI Content Block Type System ────────────────────────────────────────────
+
+export type GuiContentBlock =
+  | GuiTextBlock
+  | GuiThinkingBlock
+  | GuiRedactedThinkingBlock
+  | GuiToolUseBlock
+  | GuiToolResultBlock
+  | GuiSystemBlock;
+
+export interface GuiTextBlock {
+  type: "text";
+  text: string;
+}
+
+export interface GuiThinkingBlock {
+  type: "thinking";
+  thinking: string;
+  collapsed?: boolean;
+}
+
+export interface GuiRedactedThinkingBlock {
+  type: "redacted_thinking";
+}
+
+export type GuiToolStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "error"
+  | "cancelled"
+  | "rejected";
+
+export interface GuiToolProgress {
+  message?: string;
+  percent?: number;
+  stdout?: string;
+  stderr?: string;
+}
+
+export interface GuiStructuredPatchHunk {
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  lines: string[];
+}
+
+export interface GuiGitDiff {
+  filename: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  patch: string;
+  repository?: string;
+}
+
+export interface GuiMcpResultItem {
+  type: "text" | "image" | "resource";
+  text?: string;
+  data?: string;
+  mimeType?: string;
+  uri?: string;
+  uiResourceUri?: string;
+}
+
+export interface GuiToolResultPayload {
+  isError: boolean;
+  content: string | GuiMcpResultItem[];
+  structuredPatch?: GuiStructuredPatchHunk[];
+  gitDiff?: GuiGitDiff;
+  filePath?: string;
+  returnCodeInterpretation?: string;
+  interrupted?: boolean;
+}
+
+export interface GuiToolUseBlock {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+  status: GuiToolStatus;
+  isMcp: boolean;
+  mcpServer?: string;
+  mcpTool?: string;
+  progress?: GuiToolProgress;
+  result?: GuiToolResultPayload;
+}
+
+export interface GuiToolResultBlock {
+  type: "tool_result";
+  toolUseId: string;
+  isError: boolean;
+  content: string;
+}
+
+export type GuiSystemSubtype =
+  | "api_error"
+  | "rate_limit"
+  | "memory_saved"
+  | "agents_killed"
+  | "turn_duration"
+  | "bridge_status"
+  | "skill_loaded"
+  | "cost_summary"
+  | "informational";
+
+export interface GuiSystemBlock {
+  type: "system";
+  subtype: GuiSystemSubtype;
+  level: "info" | "warning" | "error";
+  message: string;
+  data?: Record<string, unknown>;
+}
+
+export interface GuiMessageUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationInputTokens?: number;
+  cacheReadInputTokens?: number;
+  costUsd?: number;
+}
+
+export interface GuiAgentTask {
+  id: string;
+  sessionId: string;
+  description: string;
+  agentType?: string;
+  name?: string;
+  status: "initializing" | "running" | "completed" | "error" | "killed";
+  toolUseCount: number;
+  tokens: number | null;
+  isAsync: boolean;
+  lastToolInfo?: string;
+  startedAt: string;
+  finishedAt?: string;
+  childMessages?: DesktopGuiConversationMessage[];
+}
+
+export interface GuiConversationBlockDeltaPayload {
+  sessionId: string;
+  messageId: string;
+  blockIndex: number;
+  delta: GuiBlockDelta;
+}
+
+export type GuiBlockDelta =
+  | { type: "text_delta"; text: string }
+  | { type: "thinking_delta"; thinking: string }
+  | { type: "tool_status"; status: GuiToolStatus }
+  | { type: "tool_progress"; progress: GuiToolProgress }
+  | { type: "tool_result"; result: GuiToolResultPayload }
+  | { type: "block_added"; block: GuiContentBlock };
+
+// ─── Message & Snapshot ───────────────────────────────────────────────────────
+
 export interface DesktopGuiConversationMessage {
   id: string;
   role: DesktopGuiConversationRole;
+  /** Legacy plain-text fallback. Used when blocks is empty/undefined. */
   text: string;
+  blocks?: GuiContentBlock[];
+  usage?: GuiMessageUsage;
+  durationMs?: number;
   createdAt: string;
   status: DesktopGuiConversationMessageStatus;
   providerId: DesktopProviderId;
@@ -226,6 +386,8 @@ export interface DesktopGuiConversationSnapshot {
   sessionId: string;
   messages: DesktopGuiConversationMessage[];
   updatedAt: string;
+  agentTasks?: GuiAgentTask[];
+  totalUsage?: GuiMessageUsage;
 }
 
 export interface DesktopGuiConversationSendInput {
@@ -297,17 +459,34 @@ export interface DesktopBridge {
   removeWorktree: (worktreeId: string) => Promise<SidebarStateSnapshot>;
   prepareSession: (worktreeId: string) => Promise<SidebarStateSnapshot>;
   createSession: (input: SessionCreateInput) => Promise<SidebarStateSnapshot>;
-  selectSession: (worktreeId: string, sessionId: string) => Promise<SidebarStateSnapshot>;
-  removeSession: (worktreeId: string, sessionId: string) => Promise<SidebarStateSnapshot>;
-  getGuiConversation: (sessionId: string) => Promise<DesktopGuiConversationSnapshot>;
+  selectSession: (
+    worktreeId: string,
+    sessionId: string,
+  ) => Promise<SidebarStateSnapshot>;
+  removeSession: (
+    worktreeId: string,
+    sessionId: string,
+  ) => Promise<SidebarStateSnapshot>;
+  getGuiConversation: (
+    sessionId: string,
+  ) => Promise<DesktopGuiConversationSnapshot>;
   sendGuiConversationMessage: (
     input: DesktopGuiConversationSendInput,
   ) => Promise<DesktopGuiConversationSnapshot>;
+  onGuiConversationBlockDelta: (
+    listener: (payload: GuiConversationBlockDeltaPayload) => void,
+  ) => () => void;
   revealInFinder: (path: string) => Promise<void>;
   showItemInFolder: (path: string) => Promise<void>;
-  createTerminalSession: (input: TerminalCreateInput) => Promise<TerminalSessionInfo>;
+  createTerminalSession: (
+    input: TerminalCreateInput,
+  ) => Promise<TerminalSessionInfo>;
   writeTerminal: (sessionId: string, data: string) => Promise<void>;
   closeTerminal: (sessionId: string) => Promise<void>;
-  onTerminalData: (listener: (payload: TerminalDataPayload) => void) => () => void;
-  onTerminalExit: (listener: (payload: TerminalExitPayload) => void) => () => void;
+  onTerminalData: (
+    listener: (payload: TerminalDataPayload) => void,
+  ) => () => void;
+  onTerminalExit: (
+    listener: (payload: TerminalExitPayload) => void,
+  ) => () => void;
 }
