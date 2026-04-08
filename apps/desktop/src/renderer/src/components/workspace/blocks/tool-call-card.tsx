@@ -19,7 +19,6 @@ import type {
 } from "../../../../../shared/contracts";
 import { cn } from "@renderer/lib/cn";
 import { BashOutputBlock } from "./bash-output-block";
-import { McpToolBlock } from "./mcp-tool-block";
 
 // ─── Tool metadata resolution ─────────────────────────────────────────────────
 
@@ -114,7 +113,6 @@ function inputSummary(name: string, input: Record<string, unknown>): string {
 // ─── Expanded content helper ─────────────────────────────────────────────────
 
 function ExpandedContent({ block }: { block: GuiToolUseBlock }) {
-  if (block.isMcp) return <McpToolBlock block={block} />;
   if (block.progress?.stdout !== undefined || block.result?.content) {
     return <BashOutputBlock block={block} />;
   }

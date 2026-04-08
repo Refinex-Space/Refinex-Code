@@ -8,9 +8,10 @@ import { Shield, ExternalLink, FileText } from "lucide-react";
 
 interface McpToolBlockProps {
   block: GuiToolUseBlock;
+  isNested?: boolean;
 }
 
-export function McpToolBlock({ block }: McpToolBlockProps) {
+export function McpToolBlock({ block, isNested }: McpToolBlockProps) {
   const result = block.result;
   if (!result) return null;
 
@@ -20,7 +21,7 @@ export function McpToolBlock({ block }: McpToolBlockProps) {
 
   if (textContent) {
     return (
-      <div className="px-3.5 py-3">
+      <div className={cn(!isNested && "px-3.5 py-3")}>
         <pre className="whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-[var(--color-foreground)]">
           {textContent.slice(0, 4000)}
           {textContent.length > 4000 && (
@@ -33,7 +34,12 @@ export function McpToolBlock({ block }: McpToolBlockProps) {
 
   if (items) {
     return (
-      <div className="flex flex-col divide-y divide-[var(--color-border)]">
+      <div
+        className={cn(
+          "flex flex-col divide-y divide-[var(--color-border)]",
+          !isNested && "",
+        )}
+      >
         {items.map((item, i) => (
           <McpResultItemView key={i} item={item} />
         ))}

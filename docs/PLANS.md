@@ -16,6 +16,12 @@
 
 ## Recently Completed
 
+### MCP Tool Block — 内联折叠 + 高度受限展开
+
+优化 MCP 工具块的 UI，从"展开后铺满"改为"内联折叠头 + 高度受限滚动展开区"。
+
+- [MCP Tool Block Redesign](exec-plans/completed/2026-04-09-mcp-tool-block-redesign.md) ✅ Completed
+
 ### File Operation Block — 深度样式重构
 
 将文件编辑/创建/查看工具展示从 ToolCallCard 卡片升级为 Codex 风格内联文件操作块。

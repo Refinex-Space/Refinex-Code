@@ -8,6 +8,10 @@ import {
   FileOperationBlock,
   isFileOperationTool,
 } from "./blocks/file-operation-block";
+import {
+  McpToolBlockWrapper,
+  isMcpTool,
+} from "./blocks/mcp-tool-block-wrapper";
 
 interface BlockRendererProps {
   block: GuiContentBlock;
@@ -37,6 +41,9 @@ export function BlockRenderer({ block, isStreaming }: BlockRendererProps) {
     case "tool_use":
       if (isFileOperationTool(block.name)) {
         return <FileOperationBlock block={block} />;
+      }
+      if (isMcpTool(block.name)) {
+        return <McpToolBlockWrapper block={block} />;
       }
       return <ToolCallCard block={block} />;
 
