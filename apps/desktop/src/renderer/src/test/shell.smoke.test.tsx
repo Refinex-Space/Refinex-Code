@@ -275,7 +275,7 @@ describe("desktop shell", () => {
     ).toHaveAttribute("aria-selected", "true");
     expect(
       document.querySelector('[data-thread-surface="content"]'),
-    ).toHaveClass("max-w-[920px]");
+    ).toHaveClass("w-full", "overflow-y-auto");
     expect(
       document.querySelector('[data-thread-composer="surface"]'),
     ).toHaveClass("mx-auto", "max-w-[920px]");

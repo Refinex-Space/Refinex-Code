@@ -5,16 +5,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 REQUIRED_FILES = ["AGENTS.md", "ARCHITECTURE.md", "docs/DESIGN.md", "docs/FRONTEND.md", "docs/OBSERVABILITY.md", "docs/PLANS.md", "docs/PRODUCT_SENSE.md", "docs/QUALITY_SCORE.md", "docs/README.md", "docs/RELIABILITY.md", "docs/SECURITY.md", "docs/design-docs/core-beliefs.md", "docs/design-docs/index.md", "docs/exec-plans/completed/README.md", "docs/exec-plans/tech-debt-tracker.md", "docs/generated/README.md", "docs/generated/harness-manifest.md", "docs/product-specs/index.md", "docs/references/index.md", "scripts/check_harness.py"]
 ROUTE_DOCS = ["docs/PLANS.md", "docs/SECURITY.md", "docs/RELIABILITY.md", "docs/OBSERVABILITY.md", "docs/QUALITY_SCORE.md", "docs/FRONTEND.md", "docs/PRODUCT_SENSE.md", "docs/DESIGN.md", "docs/design-docs/index.md"]
-LOCAL_AGENT_DIRS = []
-PROFILE_FINGERPRINT = "e18b06cfce7a5c55"
+LOCAL_AGENT_DIRS = ["apps/desktop"]
+PROFILE_FINGERPRINT = "861d1bbba3d6df84"
 MANIFEST_PATH = "docs/generated/harness-manifest.md"
 ROOT_AGENT_MAX_LINES = 140
 LOCAL_AGENT_MAX_LINES = 120
 PLANS_MAX_LINES = 180
+PLAN_FILENAME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-.+\.md$")
 
 
 def _append(findings: list[dict], severity: str, code: str, path: str, message: str) -> None:
@@ -30,6 +32,10 @@ def _append(findings: list[dict], severity: str, code: str, path: str, message: 
 
 def _line_count(path: Path) -> int:
     return len(path.read_text(encoding="utf-8").splitlines())
+
+
+def _has_dated_plan_name(path: Path) -> bool:
+    return bool(PLAN_FILENAME_RE.match(path.name))
 
 
 def run_check(repo: Path) -> dict:
@@ -107,7 +113,10 @@ def run_check(repo: Path) -> dict:
                 f"PLANS.md exceeds {PLANS_MAX_LINES} lines and should stay as a short routing index",
             )
         if active_dir.exists():
-            active_plans = sorted(path.name for path in active_dir.glob("*.md") if path.is_file())
+            active_plan_paths = sorted(
+                path for path in active_dir.glob("*.md") if path.is_file() and path.name != "README.md"
+            )
+            active_plans = [path.name for path in active_plan_paths]
             if active_plans and "docs/exec-plans/active" not in plans_text:
                 _append(
                     findings,
@@ -116,14 +125,22 @@ def run_check(repo: Path) -> dict:
                     "docs/PLANS.md",
                     "PLANS.md does not mention docs/exec-plans/active",
                 )
-            for plan_name in active_plans:
-                if plan_name not in plans_text and plan_name != "README.md":
+            for plan_path in active_plan_paths:
+                if not _has_dated_plan_name(plan_path):
+                    _append(
+                        findings,
+                        "P2",
+                        "plan-missing-date-prefix",
+                        str(plan_path.relative_to(repo)),
+                        "Execution plan filename must start with YYYY-MM-DD-",
+                    )
+                if plan_path.name not in plans_text:
                     _append(
                         findings,
                         "P2",
                         "plans-missing-active-entry",
                         "docs/PLANS.md",
-                        f"PLANS.md does not mention active plan {plan_name}",
+                        f"PLANS.md does not mention active plan {plan_path.name}",
                     )
 
     completed_dir = repo / "docs" / "exec-plans" / "completed"
@@ -131,6 +148,14 @@ def run_check(repo: Path) -> dict:
         for path in sorted(completed_dir.glob("*.md")):
             if path.name == "README.md":
                 continue
+            if not _has_dated_plan_name(path):
+                _append(
+                    findings,
+                    "P2",
+                    "plan-missing-date-prefix",
+                    str(path.relative_to(repo)),
+                    "Execution plan filename must start with YYYY-MM-DD-",
+                )
             if not path.read_text(encoding="utf-8").lstrip().startswith("> ✅ Completed:"):
                 _append(
                     findings,

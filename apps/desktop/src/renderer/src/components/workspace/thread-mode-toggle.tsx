@@ -48,7 +48,7 @@ export function ThreadModeToggle({
             }}
             className={
               active
-                ? "flex h-6 min-w-[38px] items-center justify-center rounded-full bg-[var(--color-thread-mode-toggle-active-bg)] px-2 text-[10px] font-semibold tracking-[0.06em] text-[var(--color-thread-mode-toggle-active-fg)] shadow-[var(--shadow-thread-mode-toggle-active)] transition-colors duration-150"
+                ? "flex h-6 min-w-[38px] items-center justify-center rounded-full border border-[var(--color-thread-mode-toggle-active-border)] bg-[var(--color-thread-mode-toggle-active-bg)] px-2 text-[10px] font-semibold tracking-[0.06em] text-[var(--color-thread-mode-toggle-active-fg)] shadow-[var(--shadow-thread-mode-toggle-active)] backdrop-blur-md transition-colors duration-150"
                 : "flex h-6 min-w-[38px] items-center justify-center rounded-full px-2 text-[10px] font-semibold tracking-[0.06em] text-[var(--color-thread-mode-toggle-inactive-fg)] transition-colors duration-150 hover:bg-[var(--color-thread-mode-toggle-hover-bg)] hover:text-[var(--color-thread-mode-toggle-hover-fg)]"
             }
           >

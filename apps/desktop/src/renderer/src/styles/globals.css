@@ -30,8 +30,9 @@
   --color-accent: #cfd5de;
   --color-accent-strong: #d7dce4;
   --color-thread-mode-toggle-bg: rgba(255, 255, 255, 0.78);
-  --color-thread-mode-toggle-active-bg: #0f172a;
-  --color-thread-mode-toggle-active-fg: #ffffff;
+  --color-thread-mode-toggle-active-bg: rgba(255, 255, 255, 0.9);
+  --color-thread-mode-toggle-active-border: rgba(148, 163, 184, 0.34);
+  --color-thread-mode-toggle-active-fg: #243447;
   --color-thread-mode-toggle-inactive-fg: #667085;
   --color-thread-mode-toggle-hover-fg: #0f172a;
   --color-thread-mode-toggle-hover-bg: rgba(15, 23, 42, 0.04);
@@ -79,7 +80,7 @@
   --color-terminal-embedded-ansi-bright-cyan: #0891b2;
   --color-terminal-embedded-ansi-bright-white: #0f172a;
   --shadow-panel: 0 18px 42px rgba(15, 23, 42, 0.07);
-  --shadow-thread-mode-toggle-active: 0 6px 14px rgba(15, 23, 42, 0.14);
+  --shadow-thread-mode-toggle-active: 0 5px 14px rgba(148, 163, 184, 0.28);
   --sidebar-width: 258px;
   --titlebar-height: 58px;
 }
@@ -99,8 +100,9 @@
   --color-accent: #3a404a;
   --color-accent-strong: #565e6b;
   --color-thread-mode-toggle-bg: rgba(10, 12, 16, 0.88);
-  --color-thread-mode-toggle-active-bg: #252a33;
-  --color-thread-mode-toggle-active-fg: #f5f7fa;
+  --color-thread-mode-toggle-active-bg: rgba(224, 231, 255, 0.14);
+  --color-thread-mode-toggle-active-border: rgba(148, 163, 184, 0.34);
+  --color-thread-mode-toggle-active-fg: #f3f6fb;
   --color-thread-mode-toggle-inactive-fg: #808895;
   --color-thread-mode-toggle-hover-fg: #e3e8ef;
   --color-thread-mode-toggle-hover-bg: rgba(245, 247, 250, 0.06);
@@ -148,7 +150,7 @@
   --color-terminal-embedded-ansi-bright-cyan: #67e8f9;
   --color-terminal-embedded-ansi-bright-white: #f8fafc;
   --shadow-panel: 0 18px 48px rgba(0, 0, 0, 0.46);
-  --shadow-thread-mode-toggle-active: 0 8px 18px rgba(0, 0, 0, 0.34);
+  --shadow-thread-mode-toggle-active: 0 8px 18px rgba(0, 0, 0, 0.28);
 }
 
 *,

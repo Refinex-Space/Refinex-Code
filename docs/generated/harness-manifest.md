@@ -6,9 +6,9 @@
 - **Project**: Refinex-Code
 - **Project type**: full-stack
 - **Languages**: TypeScript, JavaScript
-- **Framework signals**: React
+- **Framework signals**: Vitest, React
 - **Documentation language**: en
-- **Profile fingerprint**: `e18b06cfce7a5c55`
+- **Profile fingerprint**: `861d1bbba3d6df84`
 
 ## Managed Files
 
@@ -28,12 +28,14 @@
 - `docs/exec-plans/completed/README.md`
 - `docs/exec-plans/tech-debt-tracker.md`
 - `docs/generated/README.md`
+- `docs/generated/harness-manifest.md`
 - `docs/product-specs/index.md`
 - `docs/references/index.md`
+- `scripts/check_harness.py`
 
 ## Local AGENTS Coverage
 
-- No local AGENTS generated
+- `apps/desktop`
 
 ## Indexes and Entry Points
 

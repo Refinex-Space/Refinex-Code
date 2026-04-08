@@ -34,8 +34,8 @@ export function WorkspaceConversation({
   }
 
   return (
-    <div className="flex h-full w-full flex-col overflow-y-auto px-2 py-2">
-      <div className="mx-auto flex w-full max-w-[760px] flex-col gap-4 pb-6">
+    <div className="mx-auto flex h-full w-full max-w-[920px] flex-col py-2">
+      <div className="flex w-full flex-col gap-4 pb-6">
         {snapshot.messages.map((message) => {
           const isAssistant = message.role === "assistant";
           const isPending = message.status === "pending";
@@ -54,26 +54,16 @@ export function WorkspaceConversation({
             >
               <div
                 className={cn(
-                  "max-w-[min(88%,46rem)] rounded-[22px] px-4 py-3 text-[14px] leading-7 shadow-[var(--shadow-panel)]",
+                  "max-w-[min(88%,46rem)] rounded-[22px] px-4 py-3 text-[14px] leading-7",
                   isAssistant
-                    ? "border border-[var(--color-border)] bg-[var(--color-panel)] text-[var(--color-fg)]"
-                    : "bg-[var(--color-fg)] text-[var(--color-bg)]",
+                    ? "bg-transparent text-[var(--color-fg)]"
+                    : "bg-[var(--color-surface-strong)] text-[var(--color-fg)]",
                   isError &&
                     "border-[rgba(239,68,68,0.24)] bg-[rgba(239,68,68,0.08)] text-[var(--color-fg)]",
                   isPending && "text-[var(--color-muted)]",
                 )}
               >
                 <div className="whitespace-pre-wrap break-words">{body}</div>
-                <div
-                  className={cn(
-                    "mt-2 text-[11px]",
-                    isAssistant
-                      ? "text-[var(--color-muted)]"
-                      : "text-[var(--color-bg)]/72",
-                  )}
-                >
-                  {isAssistant ? "AI" : "你"}
-                </div>
               </div>
             </div>
           );

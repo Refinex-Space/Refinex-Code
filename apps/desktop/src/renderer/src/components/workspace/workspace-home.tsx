@@ -157,23 +157,25 @@ export function WorkspaceHome({
   };
 
   return (
-    <div className="relative flex h-full min-h-0 justify-center overflow-hidden bg-[var(--color-bg)] px-4">
-      <div className="relative mx-auto flex h-full w-full max-w-[960px] flex-col items-center pb-6">
+    <div className="relative flex h-full min-h-0 overflow-hidden bg-[var(--color-bg)]">
+      <div className="relative flex h-full w-full flex-col items-center pb-6">
         {showThreadSurface ? (
           <>
             <div
-              className="mx-auto flex min-h-0 w-full max-w-[920px] flex-1 pb-4 pt-4"
+              className="flex min-h-0 w-full flex-1 overflow-y-auto pb-4 pt-4"
               data-thread-surface="content"
             >
               {activeConversationMode === "tui" ? (
-                <TerminalPanel
-                  sessionId={`thread-tui:${activeSession.id}`}
-                  cwd={activeWorktree.worktreePath}
-                  profile="thread-tui"
-                  chrome="embedded"
-                  persistOnUnmount
-                  showCloseButton={false}
-                />
+                <div className="mx-auto flex min-h-0 w-full max-w-[920px] flex-1">
+                  <TerminalPanel
+                    sessionId={`thread-tui:${activeSession.id}`}
+                    cwd={activeWorktree.worktreePath}
+                    profile="thread-tui"
+                    chrome="embedded"
+                    persistOnUnmount
+                    showCloseButton={false}
+                  />
+                </div>
               ) : !guiConversationLoading &&
                 (!guiConversation || guiConversation.messages.length === 0) ? (
                 <WorkspaceEmptyState
