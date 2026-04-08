@@ -3,8 +3,10 @@ import type {
   AppearanceSettingsSnapshot,
 } from "./appearance-settings";
 import type {
+  DesktopProviderId,
   DesktopProviderSettingsSaveInput,
   DesktopProviderSettingsSnapshot,
+  ProviderReasoningEffort,
 } from "./provider-settings";
 import type {
   DesktopMcpServerSaveInput,
@@ -16,8 +18,10 @@ export type {
   AppearanceSettingsSnapshot,
 } from "./appearance-settings";
 export type {
+  DesktopProviderId,
   DesktopProviderSettingsSaveInput,
   DesktopProviderSettingsSnapshot,
+  ProviderReasoningEffort,
 } from "./provider-settings";
 export type {
   DesktopMcpServerSaveInput,
@@ -200,6 +204,39 @@ export interface SessionCreateInput {
   title?: string | null;
 }
 
+export type DesktopGuiConversationRole = "user" | "assistant";
+
+export type DesktopGuiConversationMessageStatus =
+  | "completed"
+  | "pending"
+  | "error";
+
+export interface DesktopGuiConversationMessage {
+  id: string;
+  role: DesktopGuiConversationRole;
+  text: string;
+  createdAt: string;
+  status: DesktopGuiConversationMessageStatus;
+  providerId: DesktopProviderId;
+  model: string;
+  effort: ProviderReasoningEffort;
+}
+
+export interface DesktopGuiConversationSnapshot {
+  sessionId: string;
+  messages: DesktopGuiConversationMessage[];
+  updatedAt: string;
+}
+
+export interface DesktopGuiConversationSendInput {
+  sessionId: string;
+  worktreePath: string;
+  prompt: string;
+  providerId: DesktopProviderId;
+  model: string;
+  effort: ProviderReasoningEffort;
+}
+
 export interface TerminalSessionInfo {
   sessionId: string;
   cwd: string;
@@ -262,6 +299,10 @@ export interface DesktopBridge {
   createSession: (input: SessionCreateInput) => Promise<SidebarStateSnapshot>;
   selectSession: (worktreeId: string, sessionId: string) => Promise<SidebarStateSnapshot>;
   removeSession: (worktreeId: string, sessionId: string) => Promise<SidebarStateSnapshot>;
+  getGuiConversation: (sessionId: string) => Promise<DesktopGuiConversationSnapshot>;
+  sendGuiConversationMessage: (
+    input: DesktopGuiConversationSendInput,
+  ) => Promise<DesktopGuiConversationSnapshot>;
   revealInFinder: (path: string) => Promise<void>;
   showItemInFolder: (path: string) => Promise<void>;
   createTerminalSession: (input: TerminalCreateInput) => Promise<TerminalSessionInfo>;

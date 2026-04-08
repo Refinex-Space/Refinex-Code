@@ -101,6 +101,13 @@ if (typeof HTMLCanvasElement !== "undefined") {
   });
 }
 
+if (typeof HTMLElement !== "undefined") {
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    writable: true,
+    value: vi.fn(),
+  });
+}
+
 if (typeof window !== "undefined") {
   Object.defineProperty(window, "matchMedia", {
     writable: true,
@@ -407,6 +414,37 @@ const desktopBridgeMock: DesktopBridge = {
   createSession: vi.fn().mockResolvedValue(defaultSidebarState),
   selectSession: vi.fn().mockResolvedValue(defaultSidebarState),
   removeSession: vi.fn().mockResolvedValue(defaultSidebarState),
+  getGuiConversation: vi.fn().mockResolvedValue({
+    sessionId: "session_test",
+    messages: [],
+    updatedAt: new Date().toISOString(),
+  }),
+  sendGuiConversationMessage: vi.fn().mockImplementation(async (input) => ({
+    sessionId: input.sessionId,
+    updatedAt: new Date().toISOString(),
+    messages: [
+      {
+        id: "user_1",
+        role: "user",
+        text: input.prompt,
+        createdAt: new Date().toISOString(),
+        status: "completed",
+        providerId: input.providerId,
+        model: input.model,
+        effort: input.effort,
+      },
+      {
+        id: "assistant_1",
+        role: "assistant",
+        text: "测试响应",
+        createdAt: new Date().toISOString(),
+        status: "completed",
+        providerId: input.providerId,
+        model: input.model,
+        effort: input.effort,
+      },
+    ],
+  })),
   revealInFinder: vi.fn().mockResolvedValue(undefined),
   showItemInFolder: vi.fn().mockResolvedValue(undefined),
   createTerminalSession: vi.fn().mockResolvedValue({

@@ -1,4 +1,5 @@
 import { appendFileSync, chmodSync, existsSync, statSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
@@ -7,6 +8,8 @@ import type {
   AppInfo,
   AppearanceSettingsData,
   AppearanceSettingsSnapshot,
+  DesktopGuiConversationSendInput,
+  DesktopGuiConversationSnapshot,
   DesktopMcpServerSaveInput,
   DesktopMcpServerToggleInput,
   DesktopMcpSettingsSnapshot,
@@ -31,6 +34,7 @@ import type {
   VoiceDictationTranscriptionResult,
 } from "../shared/contracts";
 import { createAppearanceSettingsStore } from "./appearance-settings-store";
+import { createGuiConversationStore } from "./gui-conversation-store";
 import { createMcpSettingsStore } from "./mcp-settings-store";
 import { createProviderSettingsStore } from "./provider-settings-store";
 import {
@@ -68,6 +72,7 @@ const terminalSessions = new Map<string, TerminalSession>();
 const appName = "RWork";
 const require = createRequire(import.meta.url);
 const TERMINAL_BACKLOG_LIMIT = 512_000;
+const GUI_CONVERSATION_TIMEOUT_MS = 60_000;
 const desktopTerminalDebugTarget = process.env.REFINEX_DESKTOP_TERMINAL_DEBUG;
 
 let mainWindow: BrowserWindow | null = null;
@@ -75,6 +80,7 @@ let worktreeStateStore: ReturnType<typeof createWorktreeStateStore> | null = nul
 let appearanceSettingsStore: ReturnType<typeof createAppearanceSettingsStore> | null = null;
 let providerSettingsStore: ReturnType<typeof createProviderSettingsStore> | null = null;
 let mcpSettingsStore: ReturnType<typeof createMcpSettingsStore> | null = null;
+let guiConversationStore: ReturnType<typeof createGuiConversationStore> | null = null;
 
 function writeDesktopTerminalDebug(scope: string, message: string) {
   if (!desktopTerminalDebugTarget) {
@@ -217,14 +223,51 @@ function resolveThreadTuiLaunchSpec() {
   };
 }
 
+function resolveDesktopCliLaunchSpec() {
+  const repoRoot = resolveDesktopRepoRoot();
+  if (!repoRoot) {
+    return {
+      command: "bun",
+      args: ["run", "dev"],
+    };
+  }
+
+  const launcherPath = join(repoRoot, "bin/rcode");
+  if (existsSync(launcherPath)) {
+    return {
+      command: launcherPath,
+      args: [] as string[],
+    };
+  }
+
+  const entryPath = join(repoRoot, "src/dev-entry.ts");
+  if (existsSync(entryPath)) {
+    return {
+      command: "bun",
+      args: [entryPath],
+    };
+  }
+
+  return {
+    command: "bun",
+    args: ["run", "dev"],
+  };
+}
+
 function resolveDefaultWorkspacePath(): string | null {
   const candidate = process.env.REFINEX_DESKTOP_DEFAULT_WORKSPACE;
   return candidate && isDirectory(candidate) ? candidate : null;
 }
 
 function emitToRenderer(
-  channel: "terminal:data" | "terminal:exit" | "voice-dictation:progress",
-  payload: TerminalDataPayload | TerminalExitPayload | VoiceDictationProgressPayload,
+  channel:
+    | "terminal:data"
+    | "terminal:exit"
+    | "voice-dictation:progress",
+  payload:
+    | TerminalDataPayload
+    | TerminalExitPayload
+    | VoiceDictationProgressPayload,
 ) {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
@@ -447,6 +490,142 @@ function getMcpSettingsStore() {
   mcpSettingsStore ??= createMcpSettingsStore();
 
   return mcpSettingsStore;
+}
+
+function getGuiConversationStore() {
+  guiConversationStore ??= createGuiConversationStore({
+    userDataPath: app.getPath("userData"),
+    runConversation: async ({
+      cliSessionId,
+      resume,
+      worktreePath,
+      prompt,
+      providerId,
+      model,
+      effort,
+    }) => {
+      const launchSpec = resolveDesktopCliLaunchSpec();
+      const settingsOverride = JSON.stringify({
+        modelProvider: providerId,
+        model,
+        effortLevel: effort,
+      });
+      const args = [
+        ...launchSpec.args,
+        "-p",
+        "--bare",
+        "--output-format",
+        "json",
+        "--max-turns",
+        "1",
+        "--tools",
+        "",
+        "--settings",
+        settingsOverride,
+        ...(resume
+          ? ["--resume", cliSessionId]
+          : ["--session-id", cliSessionId]),
+        prompt,
+      ];
+      const childEnv: NodeJS.ProcessEnv = {
+        ...process.env,
+        FORCE_COLOR: "0",
+        NO_COLOR: "1",
+        NODE_ENV: "production",
+      };
+      delete childEnv.DEV;
+
+      return await new Promise((resolve, reject) => {
+        let settled = false;
+        const settleOnce = (
+          callback: () => void,
+        ) => {
+          if (settled) {
+            return;
+          }
+
+          settled = true;
+          clearTimeout(timeoutTimer);
+          callback();
+        };
+        const child = spawn(launchSpec.command, args, {
+          cwd: resolveTerminalPath(worktreePath),
+          env: childEnv,
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+        const timeoutTimer = setTimeout(() => {
+          child.kill("SIGTERM");
+          setTimeout(() => {
+            if (!child.killed) {
+              child.kill("SIGKILL");
+            }
+          }, 2_000);
+          settleOnce(() => {
+            reject(new Error("GUI 对话请求超时，请稍后重试。"));
+          });
+        }, GUI_CONVERSATION_TIMEOUT_MS);
+
+        let stdout = "";
+        let stderr = "";
+
+        child.stdout.on("data", (chunk) => {
+          stdout += chunk.toString();
+        });
+        child.stderr.on("data", (chunk) => {
+          stderr += chunk.toString();
+        });
+        child.on("error", (error) => {
+          settleOnce(() => {
+            reject(error);
+          });
+        });
+        child.on("close", (exitCode) => {
+          settleOnce(() => {
+            const trimmedStdout = stdout.trim();
+            const trimmedStderr = stderr.trim();
+
+            if (!trimmedStdout) {
+              reject(
+                new Error(
+                  trimmedStderr || `GUI 对话进程未返回结果（exit ${String(exitCode)}）。`,
+                ),
+              );
+              return;
+            }
+
+            try {
+              const payload = JSON.parse(trimmedStdout) as {
+                result?: string;
+                errors?: string[];
+                is_error?: boolean;
+              };
+              const errors = payload.errors?.filter(Boolean) ?? [];
+              const outputText =
+                payload.result?.trim() ||
+                errors.join("\n") ||
+                trimmedStderr ||
+                "模型没有返回可展示的内容。";
+              resolve({
+                outputText,
+                isError: Boolean(payload.is_error),
+              });
+            } catch (error) {
+              reject(
+                new Error(
+                  trimmedStderr ||
+                    (error instanceof Error
+                      ? error.message
+                      : "GUI 对话结果解析失败。"),
+                ),
+              );
+            }
+          });
+        });
+      });
+    },
+  });
+
+  return guiConversationStore;
 }
 
 async function loadCurrentSkillSnapshot() {
@@ -815,6 +994,13 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle("sidebar:remove-worktree", (_event, worktreeId: string): SidebarStateSnapshot => {
+    const snapshot = getWorktreeStateStore().getSnapshot();
+    const worktree = snapshot.worktrees.find((entry) => entry.id === worktreeId) ?? null;
+    if (worktree) {
+      for (const session of worktree.sessions) {
+        getGuiConversationStore().deleteConversation(session.id);
+      }
+    }
     return getWorktreeStateStore().removeWorktree(worktreeId);
   });
 
@@ -836,7 +1022,20 @@ function registerIpcHandlers() {
   ipcMain.handle(
     "sidebar:remove-session",
     (_event, payload: { worktreeId: string; sessionId: string }): SidebarStateSnapshot => {
+      getGuiConversationStore().deleteConversation(payload.sessionId);
       return getWorktreeStateStore().removeSession(payload.worktreeId, payload.sessionId);
+    },
+  );
+  ipcMain.handle(
+    "gui-conversation:get",
+    (_event, sessionId: string): DesktopGuiConversationSnapshot => {
+      return getGuiConversationStore().getSnapshot(sessionId);
+    },
+  );
+  ipcMain.handle(
+    "gui-conversation:send",
+    async (_event, input: DesktopGuiConversationSendInput): Promise<DesktopGuiConversationSnapshot> => {
+      return await getGuiConversationStore().submitMessage(input);
     },
   );
 

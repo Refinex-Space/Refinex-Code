@@ -7,6 +7,8 @@ import type {
   SkillDownloadResult,
   DesktopMcpServerSaveInput,
   DesktopMcpServerToggleInput,
+  DesktopGuiConversationSendInput,
+  DesktopGuiConversationSnapshot,
   SkillMutationResult,
   DesktopMcpSettingsSnapshot,
   DesktopProviderSettingsSaveInput,
@@ -102,6 +104,10 @@ const desktopBridge: DesktopBridge = {
       worktreeId,
       sessionId,
     }) as Promise<SidebarStateSnapshot>,
+  getGuiConversation: (sessionId) =>
+    ipcRenderer.invoke("gui-conversation:get", sessionId) as Promise<DesktopGuiConversationSnapshot>,
+  sendGuiConversationMessage: (input: DesktopGuiConversationSendInput) =>
+    ipcRenderer.invoke("gui-conversation:send", input) as Promise<DesktopGuiConversationSnapshot>,
   revealInFinder: (workspacePath) => ipcRenderer.invoke("workspace:reveal", workspacePath),
   showItemInFolder: (targetPath) => ipcRenderer.invoke("finder:show-item", targetPath),
   createTerminalSession: (input) =>

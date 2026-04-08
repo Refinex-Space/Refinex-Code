@@ -76,8 +76,15 @@ interface WorkspaceComposerProps {
   activeSessionId: string | null;
   activeWorktreePath: string | null;
   conversationMode: ThreadConversationMode;
+  guiConversationSending?: boolean;
   hasActiveSession: boolean;
   hasWorktree: boolean;
+  onSendGuiMessage?: (input: {
+    prompt: string;
+    providerId: DesktopProviderId;
+    model: string;
+    effort: ProviderReasoningEffort;
+  }) => Promise<void>;
 }
 
 function supportsProviderSettingsBridge() {
@@ -692,8 +699,10 @@ export function WorkspaceComposer({
   activeSessionId,
   activeWorktreePath,
   conversationMode,
+  guiConversationSending = false,
   hasActiveSession,
   hasWorktree,
+  onSendGuiMessage,
 }: WorkspaceComposerProps) {
   const [value, setValue] = useState("");
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
@@ -716,7 +725,7 @@ export function WorkspaceComposer({
     ? `${selectedSlashCommand.insertValue}${value}`
     : `${selectedSkillPills.map((skill) => skill.insertValue).join("")}${value}`;
   const hasDraft = composerValue.trim().length > 0;
-  const canSend = hasActiveSession && hasDraft;
+  const canSend = hasActiveSession && hasDraft && !guiConversationSending;
   const canUseDictation = hasActiveSession;
 
   const composerControlsHydrated = useUIStore(
@@ -919,7 +928,25 @@ export function WorkspaceComposer({
     }
 
     if (conversationMode === "gui") {
-      toast.info("GUI 模式敬请期待，先使用 TUI 专注模式。");
+      if (!onSendGuiMessage) {
+        toast.error("GUI 对话桥接未就绪。");
+        return;
+      }
+
+      try {
+        await onSendGuiMessage({
+          prompt: composerValue,
+          providerId: composerProviderId,
+          model: composerModel,
+          effort: composerEffort,
+        });
+        setSelectedStatusPreview(null);
+        setSelectedSlashCommand(null);
+        setSelectedSkillPills([]);
+        applyValue("");
+      } catch (error) {
+        toast.error(getErrorMessage(error));
+      }
       return;
     }
 
@@ -1500,7 +1527,9 @@ export function WorkspaceComposer({
                 !canSend
                   ? "输入内容并选择线程后可发送"
                   : conversationMode === "gui"
-                    ? "GUI 模式敬请期待"
+                    ? guiConversationSending
+                      ? "正在等待 GUI 响应"
+                      : "发送到当前线程 GUI"
                     : "发送到当前线程 TUI"
               }
             >
@@ -1518,7 +1547,9 @@ export function WorkspaceComposer({
                   !canSend
                     ? "发送消息不可用"
                     : conversationMode === "gui"
-                      ? "发送到 GUI 模式"
+                      ? guiConversationSending
+                        ? "GUI 正在响应"
+                        : "发送到 GUI 模式"
                       : "发送到当前线程 TUI"
                 }
               >

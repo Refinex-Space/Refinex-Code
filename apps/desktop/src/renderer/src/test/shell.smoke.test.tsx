@@ -323,7 +323,7 @@ describe("desktop shell", () => {
     });
   });
 
-  it("switches between GUI and TUI modes and routes composer input into the thread terminal", async () => {
+  it("switches between GUI and TUI modes and routes composer input into the correct backend", async () => {
     vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue({
       ...emptySidebarState,
       storageRoot:
@@ -384,14 +384,48 @@ describe("desktop shell", () => {
       );
     });
 
+    vi.mocked(window.desktopApp.createTerminalSession).mockClear();
+    vi.mocked(window.desktopApp.writeTerminal).mockClear();
+    vi.mocked(window.desktopApp.getGuiConversation).mockClear();
+    vi.mocked(window.desktopApp.sendGuiConversationMessage).mockClear();
+
     fireEvent.click(screen.getByRole("tab", { name: "切换到 GUI 模式" }));
 
-    expect(await screen.findByText("开始构建")).toBeInTheDocument();
-    expect(screen.getByLabelText("当前项目：alpha")).toBeInTheDocument();
+    expect(await screen.findByText("开始一段 GUI 对话")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "切换到 GUI 模式" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
+
+    await waitFor(() => {
+      expect(window.desktopApp.getGuiConversation).toHaveBeenCalledWith("thread-2");
+    });
+
+    fireEvent.change(screen.getByLabelText("新线程"), {
+      target: {
+        value: "请总结 README 的核心目标",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送到 GUI 模式" }));
+
+    await waitFor(() => {
+      expect(window.desktopApp.sendGuiConversationMessage).toHaveBeenCalledWith({
+        sessionId: "thread-2",
+        worktreePath: "/Users/test/projects/alpha",
+        prompt: "请总结 README 的核心目标",
+        providerId: "anthropic",
+        model: "claude-sonnet-4-6",
+        effort: "high",
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("请总结 README 的核心目标")).toBeInTheDocument();
+      expect(screen.getByText("测试响应")).toBeInTheDocument();
+    });
+
+    expect(window.desktopApp.createTerminalSession).not.toHaveBeenCalled();
+    expect(window.desktopApp.writeTerminal).not.toHaveBeenCalled();
   });
 
   it("shows code review slash suggestions above skills and routes /review input into thread tui", async () => {
