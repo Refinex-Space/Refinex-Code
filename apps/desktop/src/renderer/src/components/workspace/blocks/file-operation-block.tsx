@@ -466,7 +466,7 @@ export function FileOperationBlock({ block }: FileOperationBlockProps) {
 
       {/* Expanded diff view */}
       {expanded && isExpandable && (
-        <div className="mt-1 ml-0">
+        <div className="mt-1 ml-5.5">
           {hasContent ? (
             <DiffCodeView
               lines={diff.lines}

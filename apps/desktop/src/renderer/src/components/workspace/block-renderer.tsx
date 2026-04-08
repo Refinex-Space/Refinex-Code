@@ -12,6 +12,7 @@ import {
   McpToolBlockWrapper,
   isMcpTool,
 } from "./blocks/mcp-tool-block-wrapper";
+import { WebSearchBlock, isWebSearchTool } from "./blocks/web-search-block";
 
 interface BlockRendererProps {
   block: GuiContentBlock;
@@ -44,6 +45,9 @@ export function BlockRenderer({ block, isStreaming }: BlockRendererProps) {
       }
       if (isMcpTool(block.name)) {
         return <McpToolBlockWrapper block={block} />;
+      }
+      if (isWebSearchTool(block.name)) {
+        return <WebSearchBlock block={block} />;
       }
       return <ToolCallCard block={block} />;
 

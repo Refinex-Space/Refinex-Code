@@ -148,7 +148,7 @@ export function McpToolBlockWrapper({ block }: McpToolBlockWrapperProps) {
 
       {/* Expanded content */}
       {expanded && hasResult && (
-        <div className="mt-1 ml-0">
+        <div className="mt-1 ml-5.5">
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] overflow-hidden">
             {/* Header */}
             <div className="px-3 py-1.5 bg-[var(--color-secondary)] border-b border-[var(--color-border)] text-[11px] text-[var(--color-muted)] font-mono">
