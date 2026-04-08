@@ -392,3 +392,93 @@ select {
   padding-left: 1em;
   color: var(--color-muted);
 }
+
+.gui-markdown {
+  color: var(--color-fg);
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.gui-markdown > :first-child {
+  margin-top: 0;
+}
+
+.gui-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.gui-markdown p,
+.gui-markdown ul,
+.gui-markdown ol,
+.gui-markdown table,
+.gui-markdown pre,
+.gui-markdown blockquote,
+.gui-markdown h1,
+.gui-markdown h2,
+.gui-markdown h3 {
+  margin: 0 0 0.75em;
+}
+
+.gui-markdown ul,
+.gui-markdown ol {
+  padding-left: 1.25em;
+  list-style-position: outside;
+}
+
+.gui-markdown ul {
+  list-style-type: disc;
+}
+
+.gui-markdown ol {
+  list-style-type: decimal;
+}
+
+.gui-markdown li::marker {
+  color: color-mix(in srgb, var(--color-fg) 72%, transparent);
+}
+
+.gui-markdown li + li {
+  margin-top: 0.2em;
+}
+
+.gui-markdown code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: color-mix(in srgb, var(--color-fg) 8%, transparent);
+  border-radius: 6px;
+  padding: 0.12em 0.35em;
+}
+
+.gui-markdown pre {
+  overflow-x: auto;
+  border-radius: 12px;
+  padding: 0.75em 0.9em;
+  background: color-mix(in srgb, var(--color-fg) 6%, transparent);
+}
+
+.gui-markdown pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.gui-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  font-size: 0.95em;
+}
+
+.gui-markdown thead tr {
+  border-bottom: 1px solid color-mix(in srgb, var(--color-fg) 20%, transparent);
+}
+
+.gui-markdown tbody tr + tr {
+  border-top: 1px solid color-mix(in srgb, var(--color-fg) 14%, transparent);
+}
+
+.gui-markdown th,
+.gui-markdown td {
+  text-align: left;
+  padding: 0.45em 0.55em;
+  vertical-align: top;
+}

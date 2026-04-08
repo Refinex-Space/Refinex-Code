@@ -402,6 +402,54 @@ describe("desktop shell", () => {
       ],
     });
 
+    vi.mocked(
+      window.desktopApp.sendGuiConversationMessage,
+    ).mockImplementationOnce(
+      async (input) =>
+        await new Promise((resolve) => {
+          setTimeout(() => {
+            resolve({
+              sessionId: input.sessionId,
+              updatedAt: new Date().toISOString(),
+              messages: [
+                {
+                  id: "user_markdown_1",
+                  role: "user",
+                  text: input.prompt,
+                  createdAt: new Date().toISOString(),
+                  status: "completed",
+                  providerId: input.providerId,
+                  model: input.model,
+                  effort: input.effort,
+                },
+                {
+                  id: "assistant_markdown_1",
+                  role: "assistant",
+                  text: [
+                    "当然可以。",
+                    "",
+                    "- 先梳理 README 的目标",
+                    "- 再提炼行动项",
+                    "",
+                    "1. 先确认范围",
+                    "2. 再输出方案",
+                    "",
+                    "| 项目 | 状态 |",
+                    "| --- | --- |",
+                    "| 文档结构 | 完成 |",
+                  ].join("\n"),
+                  createdAt: new Date().toISOString(),
+                  status: "completed",
+                  providerId: input.providerId,
+                  model: input.model,
+                  effort: input.effort,
+                },
+              ],
+            });
+          }, 40);
+        }),
+    );
+
     render(<App />);
 
     const composer = await screen.findByLabelText("新线程");
@@ -425,6 +473,8 @@ describe("desktop shell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "发送到 GUI 模式" }));
 
+    expect(await screen.findByText("Thinking")).toBeInTheDocument();
+
     await waitFor(() => {
       expect(window.desktopApp.sendGuiConversationMessage).toHaveBeenCalledWith(
         {
@@ -440,8 +490,24 @@ describe("desktop shell", () => {
 
     await waitFor(() => {
       expect(screen.getByText("帮我检查 README")).toBeInTheDocument();
-      expect(screen.getByText("测试响应")).toBeInTheDocument();
+      expect(screen.getByText("先梳理 README 的目标")).toBeInTheDocument();
+      expect(screen.getByText("先确认范围")).toBeInTheDocument();
+      expect(screen.getByRole("table")).toBeInTheDocument();
+      expect(screen.getByText("文档结构")).toBeInTheDocument();
     });
+
+    const markdownArticle = document.querySelector(".gui-markdown");
+    expect(markdownArticle).not.toBeNull();
+    const unorderedList = markdownArticle?.querySelector("ul");
+    const orderedList = markdownArticle?.querySelector("ol");
+    expect(unorderedList).not.toBeNull();
+    expect(orderedList).not.toBeNull();
+    expect(
+      globalThis.getComputedStyle(unorderedList as Element).listStyleType,
+    ).toBe("disc");
+    expect(
+      globalThis.getComputedStyle(orderedList as Element).listStyleType,
+    ).toBe("decimal");
 
     expect(window.desktopApp.createTerminalSession).not.toHaveBeenCalled();
     expect(window.desktopApp.writeTerminal).not.toHaveBeenCalled();
