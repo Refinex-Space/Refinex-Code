@@ -473,6 +473,10 @@ describe("desktop shell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "发送到 GUI 模式" }));
 
+    await waitFor(() => {
+      expect(composer).toHaveValue("");
+    });
+
     expect(await screen.findByText("Thinking")).toBeInTheDocument();
 
     await waitFor(() => {
@@ -508,6 +512,40 @@ describe("desktop shell", () => {
     expect(
       globalThis.getComputedStyle(orderedList as Element).listStyleType,
     ).toBe("decimal");
+
+    const threadSurface = document.querySelector(
+      '[data-thread-surface="content"]',
+    ) as HTMLDivElement | null;
+    expect(threadSurface).not.toBeNull();
+    Object.defineProperty(threadSurface as HTMLDivElement, "scrollHeight", {
+      configurable: true,
+      value: 1200,
+    });
+    Object.defineProperty(threadSurface as HTMLDivElement, "clientHeight", {
+      configurable: true,
+      value: 500,
+    });
+    Object.defineProperty(threadSurface as HTMLDivElement, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 220,
+    });
+    const scrollToMock = vi.fn();
+    Object.defineProperty(threadSurface as HTMLDivElement, "scrollTo", {
+      configurable: true,
+      value: scrollToMock,
+    });
+
+    fireEvent.scroll(threadSurface as HTMLDivElement);
+
+    const scrollToBottomButton = await screen.findByRole("button", {
+      name: "回到底部",
+    });
+    fireEvent.click(scrollToBottomButton);
+    expect(scrollToMock).toHaveBeenCalledWith({
+      top: 1200,
+      behavior: "smooth",
+    });
 
     expect(window.desktopApp.createTerminalSession).not.toHaveBeenCalled();
     expect(window.desktopApp.writeTerminal).not.toHaveBeenCalled();

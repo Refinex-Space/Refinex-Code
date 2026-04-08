@@ -48,7 +48,8 @@ import {
 
 const INPUT_MAX_HEIGHT = 152;
 const SLASH_SUGGESTIONS_LIST_ID = "workspace-composer-slash-suggestions";
-const SLASH_FLOATING_LAYER_POSITION_CLASS = "absolute inset-x-0 bottom-full mb-1.5";
+const SLASH_FLOATING_LAYER_POSITION_CLASS =
+  "absolute inset-x-0 bottom-full mb-1.5";
 const claudeLogoUrl = new URL(
   "../../../../../resources/provider-logos/claude.svg",
   import.meta.url,
@@ -173,7 +174,8 @@ const initCommandSuggestions: SlashSuggestion[] = [
     commandName: "init",
     insertValue: "/init",
     kind: "prompt-command",
-    helperText: "直接发送即可；CLI 会先扫描代码库，并通过提问逐步确定 AGENTS、skills 和 hooks 的产出范围。",
+    helperText:
+      "直接发送即可；CLI 会先扫描代码库，并通过提问逐步确定 AGENTS、skills 和 hooks 的产出范围。",
     placeholderText: "直接发送，开始扫描代码库并初始化 AGENTS / skills / hooks",
     selectionLabel: "已选择初始化命令",
     icon: "sparkles",
@@ -184,7 +186,8 @@ const reviewCommandSuggestions: SlashSuggestion[] = [
   {
     id: "builtin:review",
     label: "Review",
-    description: "审查当前 PR 或指定 PR；留空发送时 CLI 会先列出可审查的 open PR。",
+    description:
+      "审查当前 PR 或指定 PR；留空发送时 CLI 会先列出可审查的 open PR。",
     commandName: "review",
     insertValue: "/review ",
     kind: "prompt-command",
@@ -281,10 +284,12 @@ function getSlashSuggestionScore(
   const normalizedName = options.name.toLowerCase();
   const normalizedLabel = options.label.toLowerCase();
   const normalizedDescription = options.description.toLowerCase();
-  const parts = [...new Set([
-    ...normalizedName.split(/[:_-\s]+/g),
-    ...normalizedLabel.split(/[:_-\s]+/g),
-  ])].filter(Boolean);
+  const parts = [
+    ...new Set([
+      ...normalizedName.split(/[:_-\s]+/g),
+      ...normalizedLabel.split(/[:_-\s]+/g),
+    ]),
+  ].filter(Boolean);
 
   if (normalizedName === query || normalizedLabel === query) {
     return 0;
@@ -302,10 +307,7 @@ function getSlashSuggestionScore(
     return 3;
   }
 
-  if (
-    normalizedName.includes(query) ||
-    normalizedLabel.includes(query)
-  ) {
+  if (normalizedName.includes(query) || normalizedLabel.includes(query)) {
     return 4;
   }
 
@@ -334,7 +336,9 @@ function buildSlashSkillSuggestions(
   if (!snapshot) {
     return [];
   }
-  const invocableSkills = snapshot.skills.filter((skill) => skill.userInvocable);
+  const invocableSkills = snapshot.skills.filter(
+    (skill) => skill.userInvocable,
+  );
 
   if (query.length === 0) {
     return invocableSkills.map((skill) => ({
@@ -352,10 +356,12 @@ function buildSlashSkillSuggestions(
       const displayName = (skill.displayName || skill.name).toLowerCase();
       const normalizedName = skill.name.toLowerCase();
       const description = skill.description.toLowerCase().replace(/\s+/g, " ");
-      const parts = [...new Set([
-        ...normalizedName.split(/[:_-]/g),
-        ...displayName.split(/[:_-]/g),
-      ])].filter(Boolean);
+      const parts = [
+        ...new Set([
+          ...normalizedName.split(/[:_-]/g),
+          ...displayName.split(/[:_-]/g),
+        ]),
+      ].filter(Boolean);
 
       let score = Number.POSITIVE_INFINITY;
 
@@ -563,9 +569,8 @@ function buildSlashPreviewCardData(params: {
   const projectLabel = getPathTailSegment(activeWorktreePath);
   const sessionLabel = activeSessionTitle ?? "未选择线程";
   const providerLabel = providerLabels[providerId];
-  const invocableSkillCount = skillSnapshot?.skills.filter(
-    (skill) => skill.userInvocable,
-  ).length ?? 0;
+  const invocableSkillCount =
+    skillSnapshot?.skills.filter((skill) => skill.userInvocable).length ?? 0;
 
   switch (suggestion.commandName) {
     case "status":
@@ -708,7 +713,9 @@ export function WorkspaceComposer({
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [providerSnapshot, setProviderSnapshot] =
     useState<DesktopProviderSettingsSnapshot | null>(null);
-  const [skillSnapshot, setSkillSnapshot] = useState<SkillSnapshot | null>(null);
+  const [skillSnapshot, setSkillSnapshot] = useState<SkillSnapshot | null>(
+    null,
+  );
   const [selectedSlashCommand, setSelectedSlashCommand] =
     useState<SlashSuggestion | null>(null);
   const [selectedStatusPreview, setSelectedStatusPreview] =
@@ -870,8 +877,7 @@ export function WorkspaceComposer({
     [skillSnapshot, value],
   );
   const slashSuggestions = useMemo(
-    () =>
-      slashSuggestionSections.flatMap((section) => section.suggestions),
+    () => slashSuggestionSections.flatMap((section) => section.suggestions),
     [slashSuggestionSections],
   );
   const showSlashSuggestions =
@@ -910,7 +916,8 @@ export function WorkspaceComposer({
     : !hasActiveSession
       ? "咨询 RWork 任何问题，@ 添加文件，/ 唤出命令，$ 唤出 Skills"
       : "描述下一步要做的事，Enter 发送，Shift+Enter 换行";
-  const placeholder = selectedSlashCommand?.placeholderText ?? defaultPlaceholder;
+  const placeholder =
+    selectedSlashCommand?.placeholderText ?? defaultPlaceholder;
 
   const handleInput = () => {
     const element = textareaRef.current;
@@ -933,9 +940,12 @@ export function WorkspaceComposer({
         return;
       }
 
+      const submittedValue = composerValue;
+      applyValue("");
+
       try {
         await onSendGuiMessage({
-          prompt: composerValue,
+          prompt: submittedValue,
           providerId: composerProviderId,
           model: composerModel,
           effort: composerEffort,
@@ -943,8 +953,8 @@ export function WorkspaceComposer({
         setSelectedStatusPreview(null);
         setSelectedSlashCommand(null);
         setSelectedSkillPills([]);
-        applyValue("");
       } catch (error) {
+        applyValue(submittedValue);
         toast.error(getErrorMessage(error));
       }
       return;
@@ -1178,7 +1188,7 @@ export function WorkspaceComposer({
       className="mx-auto w-full max-w-[920px]"
       data-thread-composer="surface"
     >
-      <div className="relative rounded-[28px] border border-[var(--color-border)] bg-[var(--color-panel)] p-2 backdrop-blur-xl">
+      <div className="relative rounded-[28px] border border-[color-mix(in_srgb,var(--color-border)_88%,rgba(255,255,255,0.45))] bg-[color-mix(in_srgb,var(--color-panel)_86%,transparent)] p-2 shadow-[0_16px_42px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-2xl dark:shadow-[0_18px_42px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(255,255,255,0.06)]">
         <div className="px-3 pt-1">
           {showSlashSuggestions ? (
             <div
@@ -1366,9 +1376,7 @@ export function WorkspaceComposer({
               disabled={!hasActiveSession}
               aria-label={activeSessionTitle ?? "Session composer"}
               aria-controls={
-                showSlashSuggestions
-                  ? SLASH_SUGGESTIONS_LIST_ID
-                  : undefined
+                showSlashSuggestions ? SLASH_SUGGESTIONS_LIST_ID : undefined
               }
               aria-expanded={showSlashSuggestions}
               aria-activedescendant={
@@ -1393,7 +1401,9 @@ export function WorkspaceComposer({
                   <Search className="h-3 w-3" aria-hidden="true" />
                 )}
               </span>
-              <span className="truncate">{selectedSlashCommand.helperText}</span>
+              <span className="truncate">
+                {selectedSlashCommand.helperText}
+              </span>
             </div>
           ) : null}
         </div>
@@ -1478,10 +1488,10 @@ export function WorkspaceComposer({
                   ? "选择线程后可使用语音输入"
                   : !supportsVoiceDictation
                     ? "当前环境不支持本地语音听写"
-                    : dictationProgress?.message ??
+                    : (dictationProgress?.message ??
                       (isListening
                         ? "结束听写（⌥Space）"
-                        : "离线语音输入（⌥Space）")
+                        : "离线语音输入（⌥Space）"))
               }
             >
               <button
@@ -1558,7 +1568,8 @@ export function WorkspaceComposer({
             </Tooltip>
           </div>
         </div>
-        {dictationProgress && (isPreparingDictation || isTranscribingDictation) ? (
+        {dictationProgress &&
+        (isPreparingDictation || isTranscribingDictation) ? (
           <div className="px-3 pb-1 pt-1">
             <div className="rounded-[14px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
               <div className="flex items-center justify-between gap-3 text-[11px] text-[var(--color-muted)]">
