@@ -151,6 +151,21 @@ function extractFilePath(input: Record<string, unknown>): string | null {
   return p || null;
 }
 
+/**
+ * Fallback: extract file path from a result content string like
+ * "The file /path/to/file.md has been updated successfully."
+ */
+function extractFilePathFromResult(
+  content: string | unknown[] | undefined,
+): string | null {
+  if (typeof content !== "string") return null;
+  // Match "The file <path> has been ..." or "Created file <path>" etc.
+  const m = content.match(
+    /(?:file|created|wrote|updated|read)\s+([/\\][^\s]+)/i,
+  );
+  return m?.[1] ?? null;
+}
+
 /** Shorten an absolute path to just the filename (or last 2 segments). */
 function shortenPath(fullPath: string): string {
   const segments = fullPath.replace(/\\/g, "/").split("/").filter(Boolean);
@@ -317,12 +332,19 @@ export function FileOperationBlock({ block }: FileOperationBlockProps) {
   const [expanded, setExpanded] = useState(false);
 
   const kind = detectFileOpKind(block.name);
-  const filePath = extractFilePath(block.input);
+
+  // Extract file path: prefer input, fallback to result content text.
+  const inputFilePath = extractFilePath(block.input);
+  const filePath =
+    inputFilePath ?? extractFilePathFromResult(block.result?.content);
   const displayName = filePath ? shortenPath(filePath) : null;
   const statusLabel = getStatusLabel(kind, block.status);
   const KindIcon = KIND_ICONS[kind];
 
-  const diff = useMemo(() => computeDiff(kind, block.input), [kind, block.input]);
+  const diff = useMemo(
+    () => computeDiff(kind, block.input),
+    [kind, block.input],
+  );
   const hasContent = diff !== null && diff.lines.length > 0;
 
   // For result.content fallback — show the text result if no diff data
@@ -330,7 +352,7 @@ export function FileOperationBlock({ block }: FileOperationBlockProps) {
   const hasResultText =
     typeof resultText === "string" && resultText.trim().length > 0;
 
-  const isExpandable = kind !== "read" && (hasContent || hasResultText);
+  const isExpandable = hasContent || hasResultText;
 
   const handleFileNameClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -381,9 +403,10 @@ export function FileOperationBlock({ block }: FileOperationBlockProps) {
         )}
 
         {/* +N / -N badges */}
-        {diff?.stats && (diff.stats.additions > 0 || diff.stats.deletions > 0) && (
-          <LineBadges stats={diff.stats} />
-        )}
+        {diff?.stats &&
+          (diff.stats.additions > 0 || diff.stats.deletions > 0) && (
+            <LineBadges stats={diff.stats} />
+          )}
 
         {/* Spacer */}
         <span className="flex-1" />
@@ -411,7 +434,9 @@ export function FileOperationBlock({ block }: FileOperationBlockProps) {
                 <span className="font-mono text-[11px] text-[var(--color-muted)] truncate">
                   {displayName ?? "输出"}
                 </span>
-                <CopyButton text={typeof resultText === "string" ? resultText : ""} />
+                <CopyButton
+                  text={typeof resultText === "string" ? resultText : ""}
+                />
               </div>
               <pre className="px-3 py-2 font-mono text-[12px] leading-[1.6] text-[#8b949e] overflow-x-auto whitespace-pre-wrap break-words">
                 {resultText}

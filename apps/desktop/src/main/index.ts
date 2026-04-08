@@ -771,6 +771,78 @@ function getGuiConversationStore() {
               break;
             }
 
+            // ── complete assistant turn (one content block per message) ──────
+            case "assistant": {
+              const am = msg.message as
+                | {
+                    content?: Array<{
+                      type?: string;
+                      id?: string;
+                      name?: string;
+                      input?: Record<string, unknown>;
+                      text?: string;
+                      thinking?: string;
+                    }>;
+                  }
+                | undefined;
+              for (const cb of am?.content ?? []) {
+                if (cb.type === "tool_use" && cb.id) {
+                  let idx = toolUseIdToIdx.get(cb.id);
+                  if (idx === undefined) {
+                    // Tool block not seen via stream_event; create it now.
+                    idx = contentBlocks.length;
+                    const isMcp =
+                      typeof cb.name === "string" && cb.name.includes("__");
+                    const b: GuiToolUseBlock = {
+                      type: "tool_use",
+                      id: cb.id,
+                      name: cb.name ?? "",
+                      input: cb.input ?? {},
+                      status: "running",
+                      isMcp,
+                    };
+                    contentBlocks[idx] = b;
+                    toolUseIdToIdx.set(cb.id, idx);
+                    emitDelta(idx, { type: "block_added", block: b });
+                  } else {
+                    // Update existing block with populated input.
+                    const existing = contentBlocks[idx] as
+                      | GuiToolUseBlock
+                      | undefined;
+                    if (existing && cb.input) {
+                      existing.input = cb.input;
+                      emitDelta(idx, {
+                        type: "block_added",
+                        block: { ...existing },
+                      });
+                    }
+                  }
+                } else if (cb.type === "text" && cb.text) {
+                  // Complete text block — find or create.
+                  let found = false;
+                  for (let i = 0; i < contentBlocks.length; i++) {
+                    const b = contentBlocks[i];
+                    if (b?.type === "text") {
+                      b.text = cb.text;
+                      emitDelta(i, { type: "block_added", block: { ...b } });
+                      found = true;
+                      break;
+                    }
+                  }
+                  if (!found) {
+                    const idx2 = contentBlocks.length;
+                    const b: import("../shared/contracts").GuiTextBlock = {
+                      type: "text",
+                      text: cb.text,
+                    };
+                    contentBlocks[idx2] = b;
+                    emitDelta(idx2, { type: "block_added", block: b });
+                  }
+                }
+              }
+              break;
+            }
+
             // ── tool running progress ────────────────────────────────────────
             case "tool_progress": {
               const toolUseId = msg.tool_use_id as string | undefined;
