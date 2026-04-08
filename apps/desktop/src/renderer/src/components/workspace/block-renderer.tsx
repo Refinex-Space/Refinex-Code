@@ -4,6 +4,10 @@ import { ThinkingBlock } from "./blocks/thinking-block";
 import { RedactedThinkingBlock } from "./blocks/redacted-thinking-block";
 import { SystemBlock } from "./blocks/system-block";
 import { ToolCallCard } from "./blocks/tool-call-card";
+import {
+  FileOperationBlock,
+  isFileOperationTool,
+} from "./blocks/file-operation-block";
 
 interface BlockRendererProps {
   block: GuiContentBlock;
@@ -31,6 +35,9 @@ export function BlockRenderer({ block, isStreaming }: BlockRendererProps) {
       return <RedactedThinkingBlock />;
 
     case "tool_use":
+      if (isFileOperationTool(block.name)) {
+        return <FileOperationBlock block={block} />;
+      }
       return <ToolCallCard block={block} />;
 
     case "tool_result":

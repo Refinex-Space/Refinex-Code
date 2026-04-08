@@ -18,7 +18,6 @@ import type {
   GuiToolStatus,
 } from "../../../../../shared/contracts";
 import { cn } from "@renderer/lib/cn";
-import { FileEditDiffBlock } from "./file-edit-diff-block";
 import { BashOutputBlock } from "./bash-output-block";
 import { McpToolBlock } from "./mcp-tool-block";
 
@@ -116,17 +115,6 @@ function inputSummary(name: string, input: Record<string, unknown>): string {
 
 function ExpandedContent({ block }: { block: GuiToolUseBlock }) {
   if (block.isMcp) return <McpToolBlock block={block} />;
-  if (
-    block.result?.structuredPatch &&
-    block.result.structuredPatch.length > 0
-  ) {
-    return (
-      <FileEditDiffBlock
-        filePath={block.result.filePath}
-        hunks={block.result.structuredPatch}
-      />
-    );
-  }
   if (block.progress?.stdout !== undefined || block.result?.content) {
     return <BashOutputBlock block={block} />;
   }

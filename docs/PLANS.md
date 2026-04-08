@@ -16,6 +16,12 @@
 
 ## Recently Completed
 
+### File Operation Block — 深度样式重构
+
+将文件编辑/创建/查看工具展示从 ToolCallCard 卡片升级为 Codex 风格内联文件操作块。
+
+- [File Operation Block Redesign](exec-plans/completed/2026-04-08-file-operation-block-redesign.md) ✅ Completed
+
 ### Desktop GUI AI Response Panel（响应交互面板）
 
 目标：为 Refinex-Code Desktop 设计并实现生产级 AI 响应交互面板，覆盖流式 Markdown、工具调用、差异审批、子代理可视化等全部 CLI 输出类型。
