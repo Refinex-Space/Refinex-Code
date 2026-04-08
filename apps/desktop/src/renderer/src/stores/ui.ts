@@ -68,10 +68,7 @@ export function clampSidebarWidth(
       )
     : MAX_SIDEBAR_WIDTH;
 
-  return Math.max(
-    MIN_SIDEBAR_WIDTH,
-    Math.min(viewportLimitedMaxWidth, width),
-  );
+  return Math.max(MIN_SIDEBAR_WIDTH, Math.min(viewportLimitedMaxWidth, width));
 }
 
 export function getNextThemeLabel(theme: ThemeMode) {
@@ -147,7 +144,10 @@ interface UIState {
     model: string;
     effort: ProviderReasoningEffort;
   }) => void;
-  setComposerModelSelection: (model: string, effort: ProviderReasoningEffort) => void;
+  setComposerModelSelection: (
+    model: string,
+    effort: ProviderReasoningEffort,
+  ) => void;
   setComposerEffortSelection: (effort: ProviderReasoningEffort) => void;
   toggleSidebar: () => void;
   setSidebarWidth: (width: number, viewportWidth?: number) => void;
@@ -253,7 +253,10 @@ export const useUIStore = create<UIState>((set) => ({
   },
   setTerminalHeight: (height) => {
     set({
-      terminalHeight: Math.max(MIN_TERMINAL_HEIGHT, Math.min(MAX_TERMINAL_HEIGHT, height)),
+      terminalHeight: Math.max(
+        MIN_TERMINAL_HEIGHT,
+        Math.min(MAX_TERMINAL_HEIGHT, height),
+      ),
     });
   },
   setTheme: (theme) => {
@@ -311,8 +314,8 @@ export function resolveThreadConversationMode(
   sessionId: string | null,
 ) {
   if (!sessionId) {
-    return "tui";
+    return "gui";
   }
 
-  return threadConversationModes[sessionId] ?? "tui";
+  return threadConversationModes[sessionId] ?? "gui";
 }

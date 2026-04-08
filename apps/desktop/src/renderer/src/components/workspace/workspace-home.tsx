@@ -1,4 +1,7 @@
-import type { WorktreeRecord, WorktreeSessionRecord } from "../../../../shared/contracts";
+import type {
+  WorktreeRecord,
+  WorktreeSessionRecord,
+} from "../../../../shared/contracts";
 import type {
   DesktopGuiConversationSendInput,
   DesktopGuiConversationSnapshot,
@@ -7,10 +10,7 @@ import { TerminalPanel } from "@renderer/components/terminal/terminal-panel";
 import { WorkspaceComposer } from "@renderer/components/workspace/workspace-composer";
 import { WorkspaceConversation } from "@renderer/components/workspace/workspace-conversation";
 import { WorkspaceEmptyState } from "@renderer/components/workspace/workspace-empty-state";
-import {
-  resolveThreadConversationMode,
-  useUIStore,
-} from "@renderer/stores/ui";
+import { resolveThreadConversationMode, useUIStore } from "@renderer/stores/ui";
 import { getErrorMessage } from "@renderer/lib/errors";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -78,7 +78,10 @@ export function WorkspaceHome({
   }, [activeConversationMode, activeSession?.id]);
 
   const handleGuiConversationSend = async (
-    input: Omit<DesktopGuiConversationSendInput, "sessionId" | "worktreePath"> & {
+    input: Omit<
+      DesktopGuiConversationSendInput,
+      "sessionId" | "worktreePath"
+    > & {
       prompt: string;
     },
   ) => {
@@ -170,6 +173,14 @@ export function WorkspaceHome({
                   chrome="embedded"
                   persistOnUnmount
                   showCloseButton={false}
+                />
+              ) : !guiConversationLoading &&
+                (!guiConversation || guiConversation.messages.length === 0) ? (
+                <WorkspaceEmptyState
+                  activeWorktree={activeWorktree}
+                  worktrees={worktrees}
+                  onOpenWorkspace={onOpenWorkspace}
+                  onSelectWorktree={onSelectWorktree}
                 />
               ) : (
                 <WorkspaceConversation

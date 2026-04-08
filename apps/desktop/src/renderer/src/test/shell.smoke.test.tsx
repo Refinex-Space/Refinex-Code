@@ -1,10 +1,14 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { vi } from "vitest";
 import { App } from "@renderer/app";
-import {
-  DEFAULT_SIDEBAR_WIDTH,
-  useUIStore,
-} from "@renderer/stores/ui";
+import { DEFAULT_SIDEBAR_WIDTH, useUIStore } from "@renderer/stores/ui";
 import { emptySidebarState } from "@renderer/stores/worktree";
 import type {
   SidebarStateSnapshot,
@@ -13,8 +17,7 @@ import type {
 
 const slashCommandSidebarState = {
   ...emptySidebarState,
-  storageRoot:
-    "/Users/test/Library/Application Support/RWork/sidebar-state",
+  storageRoot: "/Users/test/Library/Application Support/RWork/sidebar-state",
   activeWorktreeId: "alpha",
   activeSessionId: "thread-2",
   worktrees: [
@@ -95,9 +98,15 @@ describe("desktop shell", () => {
     expect(await screen.findByText("开始构建")).toBeInTheDocument();
     const header = screen.getByRole("banner");
     const main = screen.getByRole("main");
-    expect(within(header).queryByRole("button", { name: "Open Project" })).not.toBeInTheDocument();
-    expect(within(header).queryByRole("tablist", { name: "线程交互模式" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
+    expect(
+      within(header).queryByRole("button", { name: "Open Project" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(header).queryByRole("tablist", { name: "线程交互模式" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Collapse sidebar" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "RWork logo" })).toBeInTheDocument();
     expect(within(main).getByText("选择项目")).toBeInTheDocument();
@@ -220,7 +229,9 @@ describe("desktop shell", () => {
         },
       ],
     };
-    vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue(sidebarSnapshot);
+    vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue(
+      sidebarSnapshot,
+    );
     vi.mocked(window.desktopApp.createSession).mockResolvedValue({
       ...sidebarSnapshot,
       activeSessionId: "thread-3",
@@ -253,12 +264,15 @@ describe("desktop shell", () => {
     const header = screen.getByRole("banner");
     expect((await screen.findAllByText("Thread 02")).length).toBeGreaterThan(0);
     expect(screen.getByText("Thread 01")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "搜索会话" })).toBeInTheDocument();
-    expect(within(header).getByRole("tablist", { name: "线程交互模式" })).toBeInTheDocument();
-    expect(within(header).getByRole("tab", { name: "切换到 TUI 模式" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    expect(
+      screen.getByRole("button", { name: "搜索会话" }),
+    ).toBeInTheDocument();
+    expect(
+      within(header).getByRole("tablist", { name: "线程交互模式" }),
+    ).toBeInTheDocument();
+    expect(
+      within(header).getByRole("tab", { name: "切换到 GUI 模式" }),
+    ).toHaveAttribute("aria-selected", "true");
     expect(
       document.querySelector('[data-thread-surface="content"]'),
     ).toHaveClass("max-w-[920px]");
@@ -269,36 +283,56 @@ describe("desktop shell", () => {
       screen.getByRole("button", { name: "发送消息不可用" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByPlaceholderText("描述下一步要做的事，Enter 发送，Shift+Enter 换行"),
+      screen.getByPlaceholderText(
+        "描述下一步要做的事，Enter 发送，Shift+Enter 换行",
+      ),
     ).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "选择供应商" })).toHaveTextContent("Claude");
-      expect(screen.getByRole("button", { name: "选择模型" })).toHaveTextContent("Sonnet 4.6");
-      expect(screen.getByRole("button", { name: "选择推理强度" })).toHaveTextContent("High");
+      expect(
+        screen.getByRole("button", { name: "选择供应商" }),
+      ).toHaveTextContent("Claude");
+      expect(
+        screen.getByRole("button", { name: "选择模型" }),
+      ).toHaveTextContent("Sonnet 4.6");
+      expect(
+        screen.getByRole("button", { name: "选择推理强度" }),
+      ).toHaveTextContent("High");
     });
 
     fireEvent.click(screen.getByRole("button", { name: "选择供应商" }));
     fireEvent.click(await screen.findByText("Codex"));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "选择供应商" })).toHaveTextContent("Codex");
-      expect(screen.getByRole("button", { name: "选择模型" })).toHaveTextContent("GPT-5.4");
-      expect(screen.getByRole("button", { name: "选择推理强度" })).toHaveTextContent("Medium");
+      expect(
+        screen.getByRole("button", { name: "选择供应商" }),
+      ).toHaveTextContent("Codex");
+      expect(
+        screen.getByRole("button", { name: "选择模型" }),
+      ).toHaveTextContent("GPT-5.4");
+      expect(
+        screen.getByRole("button", { name: "选择推理强度" }),
+      ).toHaveTextContent("Medium");
     });
 
     fireEvent.click(screen.getByRole("button", { name: "选择模型" }));
     fireEvent.click(await screen.findByText("GPT-5.4 Mini"));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "选择模型" })).toHaveTextContent("GPT-5.4 Mini");
-      expect(screen.getByRole("button", { name: "选择推理强度" })).toHaveTextContent("Medium");
+      expect(
+        screen.getByRole("button", { name: "选择模型" }),
+      ).toHaveTextContent("GPT-5.4 Mini");
+      expect(
+        screen.getByRole("button", { name: "选择推理强度" }),
+      ).toHaveTextContent("Medium");
     });
 
     fireEvent.click(screen.getByRole("button", { name: "选择推理强度" }));
     fireEvent.click(await screen.findByText("Low"));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "选择推理强度" })).toHaveTextContent("Low");
+      expect(
+        screen.getByRole("button", { name: "选择推理强度" }),
+      ).toHaveTextContent("Low");
     });
 
     fireEvent.click(screen.getByRole("button", { name: "选择供应商" }));
@@ -307,9 +341,15 @@ describe("desktop shell", () => {
     fireEvent.click(await screen.findByText("Haiku 4.5"));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "选择模型" })).toHaveTextContent("Haiku 4.5");
-      expect(screen.getByRole("button", { name: "选择推理强度" })).toHaveTextContent("N/A");
-      expect(screen.getByRole("button", { name: "选择推理强度" })).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "选择模型" }),
+      ).toHaveTextContent("Haiku 4.5");
+      expect(
+        screen.getByRole("button", { name: "选择推理强度" }),
+      ).toHaveTextContent("N/A");
+      expect(
+        screen.getByRole("button", { name: "选择推理强度" }),
+      ).toBeDisabled();
     });
 
     fireEvent.click(screen.getByRole("button", { name: "新线程" }));
@@ -370,6 +410,57 @@ describe("desktop shell", () => {
         value: "帮我检查 README",
       },
     });
+
+    expect(await screen.findByText("开始构建")).toBeInTheDocument();
+    expect(screen.queryByText("开始一段 GUI 对话")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: "切换到 GUI 模式" }),
+    ).toHaveAttribute("aria-selected", "true");
+
+    await waitFor(() => {
+      expect(window.desktopApp.getGuiConversation).toHaveBeenCalledWith(
+        "thread-2",
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "发送到 GUI 模式" }));
+
+    await waitFor(() => {
+      expect(window.desktopApp.sendGuiConversationMessage).toHaveBeenCalledWith(
+        {
+          sessionId: "thread-2",
+          worktreePath: "/Users/test/projects/alpha",
+          prompt: "帮我检查 README",
+          providerId: "anthropic",
+          model: "claude-sonnet-4-6",
+          effort: "high",
+        },
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("帮我检查 README")).toBeInTheDocument();
+      expect(screen.getByText("测试响应")).toBeInTheDocument();
+    });
+
+    expect(window.desktopApp.createTerminalSession).not.toHaveBeenCalled();
+    expect(window.desktopApp.writeTerminal).not.toHaveBeenCalled();
+
+    vi.mocked(window.desktopApp.createTerminalSession).mockClear();
+    vi.mocked(window.desktopApp.writeTerminal).mockClear();
+    vi.mocked(window.desktopApp.getGuiConversation).mockClear();
+    vi.mocked(window.desktopApp.sendGuiConversationMessage).mockClear();
+
+    fireEvent.click(screen.getByRole("tab", { name: "切换到 TUI 模式" }));
+    expect(
+      screen.getByRole("tab", { name: "切换到 TUI 模式" }),
+    ).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.change(screen.getByLabelText("新线程"), {
+      target: {
+        value: "请总结 README 的核心目标",
+      },
+    });
     fireEvent.click(screen.getByRole("button", { name: "发送到当前线程 TUI" }));
 
     await waitFor(() => {
@@ -380,52 +471,9 @@ describe("desktop shell", () => {
       });
       expect(window.desktopApp.writeTerminal).toHaveBeenCalledWith(
         "thread-tui:thread-2",
-        "帮我检查 README\r",
+        "请总结 README 的核心目标\r",
       );
     });
-
-    vi.mocked(window.desktopApp.createTerminalSession).mockClear();
-    vi.mocked(window.desktopApp.writeTerminal).mockClear();
-    vi.mocked(window.desktopApp.getGuiConversation).mockClear();
-    vi.mocked(window.desktopApp.sendGuiConversationMessage).mockClear();
-
-    fireEvent.click(screen.getByRole("tab", { name: "切换到 GUI 模式" }));
-
-    expect(await screen.findByText("开始一段 GUI 对话")).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "切换到 GUI 模式" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-
-    await waitFor(() => {
-      expect(window.desktopApp.getGuiConversation).toHaveBeenCalledWith("thread-2");
-    });
-
-    fireEvent.change(screen.getByLabelText("新线程"), {
-      target: {
-        value: "请总结 README 的核心目标",
-      },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "发送到 GUI 模式" }));
-
-    await waitFor(() => {
-      expect(window.desktopApp.sendGuiConversationMessage).toHaveBeenCalledWith({
-        sessionId: "thread-2",
-        worktreePath: "/Users/test/projects/alpha",
-        prompt: "请总结 README 的核心目标",
-        providerId: "anthropic",
-        model: "claude-sonnet-4-6",
-        effort: "high",
-      });
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText("请总结 README 的核心目标")).toBeInTheDocument();
-      expect(screen.getByText("测试响应")).toBeInTheDocument();
-    });
-
-    expect(window.desktopApp.createTerminalSession).not.toHaveBeenCalled();
-    expect(window.desktopApp.writeTerminal).not.toHaveBeenCalled();
   });
 
   it("shows code review slash suggestions above skills and routes /review input into thread tui", async () => {
@@ -494,7 +542,8 @@ describe("desktop shell", () => {
           sourceLabel: "Personal skills",
           skillRoot: "/Users/test/.agents/skills/tech-writing",
           skillMdPath: "/Users/test/.agents/skills/tech-writing/SKILL.md",
-          description: "Write long-form technical content for engineering work.",
+          description:
+            "Write long-form technical content for engineering work.",
           userInvocable: true,
           disableModelInvocation: false,
           invokedBy: "User or RWork",
@@ -543,8 +592,12 @@ describe("desktop shell", () => {
     expect(
       within(suggestionList).getByText("Security Review"),
     ).toBeInTheDocument();
-    expect(within(suggestionList).getByRole("option", { name: /Harness Feat/i })).toBeInTheDocument();
-    expect(within(suggestionList).getByRole("option", { name: /Tech Writing/i })).toBeInTheDocument();
+    expect(
+      within(suggestionList).getByRole("option", { name: /Harness Feat/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(suggestionList).getByRole("option", { name: /Tech Writing/i }),
+    ).toBeInTheDocument();
 
     fireEvent.change(composer, {
       target: {
@@ -562,7 +615,9 @@ describe("desktop shell", () => {
       ).toBeInTheDocument();
     });
     expect(
-      screen.getByText("输入 PR 编号；留空发送时，CLI 会先列出可审查的 open PR。"),
+      screen.getByText(
+        "输入 PR 编号；留空发送时，CLI 会先列出可审查的 open PR。",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("listbox", { name: "Slash suggestions" }),
@@ -577,6 +632,7 @@ describe("desktop shell", () => {
         value: "42",
       },
     });
+    fireEvent.click(screen.getByRole("tab", { name: "切换到 TUI 模式" }));
     fireEvent.click(screen.getByRole("button", { name: "发送到当前线程 TUI" }));
 
     await waitFor(() => {
@@ -645,7 +701,9 @@ describe("desktop shell", () => {
       name: "Slash suggestions",
     });
     expect(within(suggestionList).getByText("初始化")).toBeInTheDocument();
-    expect(within(suggestionList).getByRole("option", { name: /Init/i })).toBeInTheDocument();
+    expect(
+      within(suggestionList).getByRole("option", { name: /Init/i }),
+    ).toBeInTheDocument();
 
     fireEvent.keyDown(composer, {
       key: "Enter",
@@ -657,13 +715,16 @@ describe("desktop shell", () => {
       ).toBeInTheDocument();
     });
     expect(
-      screen.getByText("直接发送即可；CLI 会先扫描代码库，并通过提问逐步确定 AGENTS、skills 和 hooks 的产出范围。"),
+      screen.getByText(
+        "直接发送即可；CLI 会先扫描代码库，并通过提问逐步确定 AGENTS、skills 和 hooks 的产出范围。",
+      ),
     ).toBeInTheDocument();
     expect(composer).toHaveAttribute(
       "placeholder",
       "直接发送，开始扫描代码库并初始化 AGENTS / skills / hooks",
     );
 
+    fireEvent.click(screen.getByRole("tab", { name: "切换到 TUI 模式" }));
     fireEvent.click(screen.getByRole("button", { name: "发送到当前线程 TUI" }));
 
     await waitFor(() => {
@@ -740,7 +801,8 @@ describe("desktop shell", () => {
           sourceLabel: "Personal skills",
           skillRoot: "/Users/test/.agents/skills/tech-writing",
           skillMdPath: "/Users/test/.agents/skills/tech-writing/SKILL.md",
-          description: "Write long-form technical content for engineering work.",
+          description:
+            "Write long-form technical content for engineering work.",
           userInvocable: true,
           disableModelInvocation: false,
           invokedBy: "User or RWork",
@@ -793,7 +855,14 @@ describe("desktop shell", () => {
     const firstPill = screen.getByLabelText("已选择技能 Tech Writing");
     expect(firstPill).toBeInTheDocument();
     expect(firstPill).toHaveClass("text-[length:var(--ui-font-size-lg)]");
-    expect(firstPill).toHaveClass("px-2.5", "py-0", "leading-6", "gap-1", "h-6", "self-start");
+    expect(firstPill).toHaveClass(
+      "px-2.5",
+      "py-0",
+      "leading-6",
+      "gap-1",
+      "h-6",
+      "self-start",
+    );
     expect(firstPill.parentElement).toHaveClass("items-start");
     expect(composer).toHaveClass("py-0");
     expect(
@@ -810,7 +879,9 @@ describe("desktop shell", () => {
       name: "Slash suggestions",
     });
     expect(
-      within(secondSuggestionList).getByRole("option", { name: /Harness Feat/i }),
+      within(secondSuggestionList).getByRole("option", {
+        name: /Harness Feat/i,
+      }),
     ).toBeInTheDocument();
 
     fireEvent.keyDown(composer, {
@@ -818,7 +889,9 @@ describe("desktop shell", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByLabelText("已选择技能 Harness Feat")).toBeInTheDocument();
+      expect(
+        screen.getByLabelText("已选择技能 Harness Feat"),
+      ).toBeInTheDocument();
     });
 
     fireEvent.change(composer, {
@@ -826,6 +899,7 @@ describe("desktop shell", () => {
         value: "帮我写一段发布说明",
       },
     });
+    fireEvent.click(screen.getByRole("tab", { name: "切换到 TUI 模式" }));
     fireEvent.click(screen.getByRole("button", { name: "发送到当前线程 TUI" }));
 
     await waitFor(() => {
@@ -885,15 +959,23 @@ describe("desktop shell", () => {
     expect(within(previewCard).getByText("/status")).toBeInTheDocument();
     expect(within(previewCard).getByText("Desktop 版本")).toBeInTheDocument();
     expect(within(previewCard).getByText("0.1.0")).toBeInTheDocument();
-    expect(within(previewCard).getByText("Claude · Sonnet 4.6")).toBeInTheDocument();
     expect(
-      within(previewCard).queryByText("对齐 CLI 的即时状态入口，先用 desktop 已知本地状态给你一眼看清当前工作面。"),
+      within(previewCard).getByText("Claude · Sonnet 4.6"),
+    ).toBeInTheDocument();
+    expect(
+      within(previewCard).queryByText(
+        "对齐 CLI 的即时状态入口，先用 desktop 已知本地状态给你一眼看清当前工作面。",
+      ),
     ).not.toBeInTheDocument();
     expect(
-      within(previewCard).queryByText("CLI 中该命令会打开完整运行状态总览；desktop 当前先展示本地快照与入口语义。"),
+      within(previewCard).queryByText(
+        "CLI 中该命令会打开完整运行状态总览；desktop 当前先展示本地快照与入口语义。",
+      ),
     ).not.toBeInTheDocument();
     expect(
-      within(previewCard).queryByText("点击右上角关闭按钮、空白处，或继续输入，也会立即收起这张卡片。"),
+      within(previewCard).queryByText(
+        "点击右上角关闭按钮、空白处，或继续输入，也会立即收起这张卡片。",
+      ),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByLabelText("已选择代码审查命令 Review"),
@@ -1105,7 +1187,9 @@ describe("desktop shell", () => {
 
     await waitFor(() => {
       expect(window.desktopApp.prepareVoiceDictation).toHaveBeenCalled();
-      expect(screen.getByRole("button", { name: "结束语音输入" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "结束语音输入" }),
+      ).toBeInTheDocument();
     });
 
     const audioContextClass = window.AudioContext as unknown as {
@@ -1133,8 +1217,12 @@ describe("desktop shell", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "设置" }));
 
-    expect(await screen.findByRole("heading", { name: "Appearance" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "返回应用" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Appearance" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "返回应用" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Collapse sidebar" }),
     ).not.toBeInTheDocument();
@@ -1142,7 +1230,9 @@ describe("desktop shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "返回应用" }));
 
     expect(
-      await screen.findByPlaceholderText("先打开一个项目，再从左侧创建或选择线程"),
+      await screen.findByPlaceholderText(
+        "先打开一个项目，再从左侧创建或选择线程",
+      ),
     ).toBeInTheDocument();
   });
 
@@ -1193,25 +1283,27 @@ describe("desktop shell", () => {
         },
       ],
     });
-    vi.mocked(window.desktopApp.readSkillFile).mockImplementation(async (path) => {
-      if (path.endsWith("notes.md")) {
+    vi.mocked(window.desktopApp.readSkillFile).mockImplementation(
+      async (path) => {
+        if (path.endsWith("notes.md")) {
+          return {
+            path,
+            kind: "text",
+            size: 20,
+            language: "markdown",
+            content: "reference notes",
+          };
+        }
+
         return {
           path,
-          kind: "text",
-          size: 20,
+          kind: "markdown",
+          size: 64,
           language: "markdown",
-          content: "reference notes",
+          content: "# Technical Rewrite\n\nUse this skill carefully.",
         };
-      }
-
-      return {
-        path,
-        kind: "markdown",
-        size: 64,
-        language: "markdown",
-        content: "# Technical Rewrite\n\nUse this skill carefully.",
-      };
-    });
+      },
+    );
 
     render(<App />);
 
@@ -1221,17 +1313,20 @@ describe("desktop shell", () => {
     expect(screen.getAllByText("Personal skills").length).toBeGreaterThan(0);
     expect(screen.queryByText("Project skills")).not.toBeInTheDocument();
     expect(screen.getAllByText("tech-rewrite").length).toBeGreaterThan(0);
-    expect(screen.getByText("Rewrite technical material into structured docs.")).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "源码" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Rewrite technical material into structured docs."),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "源码" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "源码" }));
     expect(useUIStore.getState().skillsContentMode).toBe("source");
 
     act(() => {
-      useUIStore.getState().selectSkillItem(
-        "personal:tech-rewrite",
-        "references/notes.md",
-      );
+      useUIStore
+        .getState()
+        .selectSkillItem("personal:tech-rewrite", "references/notes.md");
     });
 
     await waitFor(() => {
@@ -1242,7 +1337,9 @@ describe("desktop shell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "新线程" }));
     expect(
-      await screen.findByPlaceholderText("先打开一个项目，再从左侧创建或选择线程"),
+      await screen.findByPlaceholderText(
+        "先打开一个项目，再从左侧创建或选择线程",
+      ),
     ).toBeInTheDocument();
   });
 
@@ -1319,7 +1416,9 @@ describe("desktop shell", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "技能" }));
 
-    fireEvent.pointerDown(await screen.findByRole("button", { name: "新增技能" }));
+    fireEvent.pointerDown(
+      await screen.findByRole("button", { name: "新增技能" }),
+    );
     fireEvent.click(await screen.findByText("创建 Skill"));
     fireEvent.click(await screen.findByText("上传技能"));
 
@@ -1350,16 +1449,22 @@ describe("desktop shell", () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "技能" }));
-    fireEvent.pointerDown(await screen.findByRole("button", { name: "新增技能" }));
+    fireEvent.pointerDown(
+      await screen.findByRole("button", { name: "新增技能" }),
+    );
     fireEvent.click(await screen.findByText("浏览 Skills"));
 
     expect(await screen.findByText("Browse Skills")).toBeInTheDocument();
     expect(await screen.findByText("/skill-creator")).toBeInTheDocument();
 
-    fireEvent.click(await screen.findByRole("button", { name: "安装 skill-creator" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "安装 skill-creator" }),
+    );
 
     await waitFor(() => {
-      expect(window.desktopApp.installRemoteSkill).toHaveBeenCalledWith("skill-creator");
+      expect(window.desktopApp.installRemoteSkill).toHaveBeenCalledWith(
+        "skill-creator",
+      );
     });
   });
 
@@ -1402,11 +1507,17 @@ describe("desktop shell", () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "技能" }));
-    fireEvent.pointerDown(await screen.findByRole("button", { name: "新增技能" }));
+    fireEvent.pointerDown(
+      await screen.findByRole("button", { name: "新增技能" }),
+    );
     fireEvent.click(await screen.findByText("浏览 Skills"));
 
-    expect(await screen.findByRole("button", { name: "更新 skill-creator" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "安装 skill-creator" })).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "更新 skill-creator" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "安装 skill-creator" }),
+    ).not.toBeInTheDocument();
   }, 10000);
 
   it("filters skills with the search input", async () => {
@@ -1487,10 +1598,18 @@ describe("desktop shell", () => {
       target: { value: "#faf1e2" },
     });
 
-    expect(document.documentElement.style.getPropertyValue("--ui-font-size")).toBe("15px");
-    expect(document.documentElement.style.getPropertyValue("--code-font-size")).toBe("14px");
-    expect(document.documentElement.style.getPropertyValue("--color-sidebar")).toBe("#ddeeff");
-    expect(document.documentElement.style.getPropertyValue("--color-bg")).toBe("#faf1e2");
+    expect(
+      document.documentElement.style.getPropertyValue("--ui-font-size"),
+    ).toBe("15px");
+    expect(
+      document.documentElement.style.getPropertyValue("--code-font-size"),
+    ).toBe("14px");
+    expect(
+      document.documentElement.style.getPropertyValue("--color-sidebar"),
+    ).toBe("#ddeeff");
+    expect(document.documentElement.style.getPropertyValue("--color-bg")).toBe(
+      "#faf1e2",
+    );
 
     await waitFor(() => {
       expect(window.desktopApp.saveAppearanceSettings).toHaveBeenLastCalledWith(
@@ -1531,9 +1650,15 @@ describe("desktop shell", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(document.documentElement.style.getPropertyValue("--color-sidebar")).toBe("#ccddee");
-      expect(document.documentElement.style.getPropertyValue("--color-bg")).toBe("#fdf6ec");
-      expect(document.documentElement.style.getPropertyValue("--ui-font-size")).toBe("16px");
+      expect(
+        document.documentElement.style.getPropertyValue("--color-sidebar"),
+      ).toBe("#ccddee");
+      expect(
+        document.documentElement.style.getPropertyValue("--color-bg"),
+      ).toBe("#fdf6ec");
+      expect(
+        document.documentElement.style.getPropertyValue("--ui-font-size"),
+      ).toBe("16px");
       expect(document.documentElement.dataset.pointerCursor).toBe("enabled");
     });
   });
@@ -1544,7 +1669,9 @@ describe("desktop shell", () => {
     fireEvent.click(await screen.findByRole("button", { name: "设置" }));
     fireEvent.click(screen.getByRole("button", { name: "供应商" }));
 
-    expect(await screen.findByRole("heading", { name: "供应商" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "供应商" }),
+    ).toBeInTheDocument();
     await screen.findByText("使用当前 Claude 登录状态");
     expect(screen.getByRole("button", { name: "Codex" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Claude" })).toBeInTheDocument();
@@ -1621,13 +1748,17 @@ describe("desktop shell", () => {
     const header = screen.getByRole("banner");
 
     fireEvent.click(
-      await within(header).findByRole("button", { name: "Open MCP quick menu" }),
+      await within(header).findByRole("button", {
+        name: "Open MCP quick menu",
+      }),
     );
 
     expect(await screen.findByText("MCP")).toBeInTheDocument();
     expect(screen.getByText("context7")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("switch", { name: "context7 quick toggle" }));
+    fireEvent.click(
+      screen.getByRole("switch", { name: "context7 quick toggle" }),
+    );
 
     await waitFor(() => {
       expect(window.desktopApp.toggleMcpServer).toHaveBeenCalledWith({
@@ -1638,7 +1769,9 @@ describe("desktop shell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "打开 MCP 设置" }));
 
-    expect(await screen.findByRole("heading", { name: "MCP 服务器" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "MCP 服务器" }),
+    ).toBeInTheDocument();
   });
 
   it("renders MCP settings and saves a new stdio server", async () => {
@@ -1647,7 +1780,9 @@ describe("desktop shell", () => {
     fireEvent.click(await screen.findByRole("button", { name: "设置" }));
     fireEvent.click(screen.getByRole("button", { name: "MCP 服务器" }));
 
-    expect(await screen.findByRole("heading", { name: "MCP 服务器" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "MCP 服务器" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("自定义服务器")).toBeInTheDocument();
     expect(screen.getByText("context7")).toBeInTheDocument();
 

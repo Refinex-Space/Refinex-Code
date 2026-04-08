@@ -21,7 +21,7 @@ export function ThreadModeToggle({
     return null;
   }
 
-  const activeMode = threadConversationModes[sessionId] ?? "tui";
+  const activeMode = threadConversationModes[sessionId] ?? "gui";
 
   return (
     <div

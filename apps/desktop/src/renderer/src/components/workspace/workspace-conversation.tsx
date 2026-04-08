@@ -30,18 +30,7 @@ export function WorkspaceConversation({
   }
 
   if (!snapshot || snapshot.messages.length === 0) {
-    return (
-      <div className="flex h-full w-full items-center justify-center px-6">
-        <div className="max-w-md rounded-[24px] border border-[var(--color-border)] bg-[var(--color-panel)] px-6 py-5 text-center shadow-[var(--shadow-panel)]">
-          <div className="text-[15px] font-medium text-[var(--color-fg)]">
-            开始一段 GUI 对话
-          </div>
-          <div className="mt-2 text-[13px] leading-6 text-[var(--color-muted)]">
-            发送一条消息后，AI 响应会直接展示在这里。
-          </div>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (
