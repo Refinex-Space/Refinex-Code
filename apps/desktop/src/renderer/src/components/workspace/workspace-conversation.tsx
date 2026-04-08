@@ -126,11 +126,22 @@ function AssistantBlockList({
   message: DesktopGuiConversationMessage;
 }) {
   const isStreaming = message.status === "pending";
+  const blocks = message.blocks!;
   return (
-    <div className="flex flex-col gap-3">
-      {message.blocks!.map((block, i) => (
-        <BlockRenderer key={i} block={block} isStreaming={isStreaming} />
-      ))}
+    <div className="flex flex-col">
+      {blocks.map((block, i) => {
+        const prev = i > 0 ? blocks[i - 1] : null;
+        const tightWithPrev =
+          prev?.type === "tool_use" && block.type === "tool_use";
+        return (
+          <div
+            key={i}
+            className={cn(i === 0 ? "mt-0" : tightWithPrev ? "mt-1" : "mt-2.5")}
+          >
+            <BlockRenderer block={block} isStreaming={isStreaming} />
+          </div>
+        );
+      })}
     </div>
   );
 }
