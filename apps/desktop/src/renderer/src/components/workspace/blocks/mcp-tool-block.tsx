@@ -15,7 +15,9 @@ export function McpToolBlock({ block, isNested }: McpToolBlockProps) {
   const result = block.result;
   if (!result) return null;
 
-  const items = Array.isArray(result.content) ? result.content : null;
+  const items = Array.isArray(result.content)
+    ? (result.content as GuiMcpResultItem[])
+    : null;
   const textContent =
     typeof result.content === "string" ? result.content : null;
 

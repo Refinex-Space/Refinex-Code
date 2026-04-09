@@ -7,7 +7,10 @@ import {
   Image as ImageIcon,
   Globe,
 } from "lucide-react";
-import type { GuiToolUseBlock } from "../../../../../shared/contracts";
+import type {
+  GuiToolUseBlock,
+  GuiMcpResultItem,
+} from "../../../../../shared/contracts";
 import { cn } from "@renderer/lib/cn";
 import { McpToolBlock } from "./mcp-tool-block";
 
@@ -27,18 +30,19 @@ function extractMcpSummary(block: GuiToolUseBlock): {
 
   // Structured items (web search, knowledge base results, etc.)
   if (Array.isArray(result.content)) {
-    const count = result.content.length;
-    const first = result.content[0];
+    const mcpItems = result.content as GuiMcpResultItem[];
+    const count = mcpItems.length;
+    const first = mcpItems[0];
 
     // First item type indicator
     let typeLabel = "";
     if (first?.type === "text" && first.text) {
-      const text = first.text.split("\n")[0];
+      const text = (first.text as string).split("\n")[0];
       typeLabel = text.slice(0, 60);
     } else if (first?.type === "image") {
       typeLabel = "📄 图片";
     } else if (first?.type === "resource" && first.uri) {
-      typeLabel = `🔗 ${first.uri?.split("/").pop() || "资源"}`;
+      typeLabel = `🔗 ${(first.uri as string).split("/").pop() || "资源"}`;
     }
 
     return {
