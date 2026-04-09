@@ -542,6 +542,192 @@ describe("desktop shell", () => {
     expect(window.desktopApp.writeTerminal).not.toHaveBeenCalled();
   });
 
+  it("renders web_search source arrays as links in GUI snapshot", async () => {
+    vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue({
+      ...emptySidebarState,
+      storageRoot:
+        "/Users/test/Library/Application Support/RWork/sidebar-state",
+      activeWorktreeId: "alpha",
+      activeSessionId: "thread-2",
+      worktrees: [
+        {
+          id: "alpha",
+          label: "alpha",
+          sourcePath: "/Users/test/projects/alpha",
+          worktreePath: "/Users/test/projects/alpha",
+          gitRoot: "/Users/test/projects/alpha",
+          branch: "main",
+          isGitRepository: true,
+          storagePath:
+            "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha",
+          createdAt: "2026-04-06T00:00:00.000Z",
+          updatedAt: "2026-04-06T00:00:00.000Z",
+          lastOpenedAt: "2026-04-06T00:00:00.000Z",
+          lastSessionId: "thread-2",
+          sessions: [
+            {
+              id: "thread-2",
+              worktreeId: "alpha",
+              title: "新线程",
+              status: "idle",
+              createdAt: "2026-04-06T00:00:00.000Z",
+              updatedAt: "2026-04-06T00:00:00.000Z",
+              lastOpenedAt: "2026-04-06T00:00:00.000Z",
+              storagePath:
+                "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha/sessions/thread-2.json",
+            },
+          ],
+        },
+      ],
+    });
+
+    vi.mocked(window.desktopApp.getGuiConversation).mockResolvedValue({
+      sessionId: "thread-2",
+      updatedAt: "2026-04-09T00:00:00.000Z",
+      messages: [
+        {
+          id: "assistant_web_search_1",
+          role: "assistant",
+          text: "",
+          blocks: [
+            {
+              type: "tool_use",
+              id: "tool_web_search_1",
+              name: "web_search",
+              input: { query: "OpenAI Responses web search" },
+              status: "completed",
+              isMcp: false,
+              result: {
+                isError: false,
+                content: [
+                  {
+                    title: "OpenAI Responses API",
+                    url: "https://platform.openai.com/docs/api-reference/responses",
+                  },
+                  {
+                    title: "OpenAI Web Search Guide",
+                    url: "https://platform.openai.com/docs/guides/tools-web-search",
+                  },
+                ],
+              },
+            },
+          ],
+          createdAt: "2026-04-09T00:00:00.000Z",
+          status: "completed",
+          providerId: "anthropic",
+          model: "claude-sonnet-4-6",
+          effort: "high",
+        },
+      ],
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(window.desktopApp.getGuiConversation).toHaveBeenCalledWith(
+        "thread-2",
+      );
+    });
+
+    expect(
+      await screen.findByText("已搜索网页", {
+        exact: false,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("OpenAI Responses web search")).toBeInTheDocument();
+    expect(screen.getByText("2 条结果")).toBeInTheDocument();
+
+    const firstSource = await screen.findByRole("link", {
+      name: "OpenAI Responses API",
+    });
+    expect(firstSource).toHaveAttribute(
+      "href",
+      "https://platform.openai.com/docs/api-reference/responses",
+    );
+
+    const secondSource = await screen.findByRole("link", {
+      name: "OpenAI Web Search Guide",
+    });
+    expect(secondSource).toHaveAttribute(
+      "href",
+      "https://platform.openai.com/docs/guides/tools-web-search",
+    );
+  });
+
+  it("shows searching web text with animated query while web_search is running", async () => {
+    vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue({
+      ...emptySidebarState,
+      storageRoot:
+        "/Users/test/Library/Application Support/RWork/sidebar-state",
+      activeWorktreeId: "alpha",
+      activeSessionId: "thread-2",
+      worktrees: [
+        {
+          id: "alpha",
+          label: "alpha",
+          sourcePath: "/Users/test/projects/alpha",
+          worktreePath: "/Users/test/projects/alpha",
+          gitRoot: "/Users/test/projects/alpha",
+          branch: "main",
+          isGitRepository: true,
+          storagePath:
+            "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha",
+          createdAt: "2026-04-06T00:00:00.000Z",
+          updatedAt: "2026-04-06T00:00:00.000Z",
+          lastOpenedAt: "2026-04-06T00:00:00.000Z",
+          lastSessionId: "thread-2",
+          sessions: [
+            {
+              id: "thread-2",
+              worktreeId: "alpha",
+              title: "新线程",
+              status: "idle",
+              createdAt: "2026-04-06T00:00:00.000Z",
+              updatedAt: "2026-04-06T00:00:00.000Z",
+              lastOpenedAt: "2026-04-06T00:00:00.000Z",
+              storagePath:
+                "/Users/test/Library/Application Support/RWork/sidebar-state/worktrees/alpha/sessions/thread-2.json",
+            },
+          ],
+        },
+      ],
+    });
+
+    vi.mocked(window.desktopApp.getGuiConversation).mockResolvedValue({
+      sessionId: "thread-2",
+      updatedAt: "2026-04-09T00:00:00.000Z",
+      messages: [
+        {
+          id: "assistant_web_search_running_1",
+          role: "assistant",
+          text: "",
+          blocks: [
+            {
+              type: "tool_use",
+              id: "tool_web_search_running_1",
+              name: "web_search",
+              input: { query: "TypeScript decorators" },
+              status: "running",
+              isMcp: false,
+            },
+          ],
+          createdAt: "2026-04-09T00:00:00.000Z",
+          status: "pending",
+          providerId: "anthropic",
+          model: "claude-sonnet-4-6",
+          effort: "high",
+        },
+      ],
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText("正在搜索网页")).toBeInTheDocument();
+    const query = screen.getByTestId("web-search-query");
+    expect(query).toHaveTextContent("TypeScript decorators");
+    expect(query).toHaveClass("animate-pulse");
+  });
+
   it("shows code review slash suggestions above skills and routes /review input into GUI backend", async () => {
     vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue({
       ...emptySidebarState,

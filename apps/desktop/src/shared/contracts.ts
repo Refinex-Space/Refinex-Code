@@ -279,7 +279,7 @@ export interface GuiMcpResultItem {
 
 export interface GuiToolResultPayload {
   isError: boolean;
-  content: string | GuiMcpResultItem[];
+  content: string | GuiMcpResultItem[] | Array<Record<string, unknown>>;
   structuredPatch?: GuiStructuredPatchHunk[];
   gitDiff?: GuiGitDiff;
   filePath?: string;

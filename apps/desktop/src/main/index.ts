@@ -874,17 +874,15 @@ function getGuiConversationStore() {
                   if (idx === undefined) continue;
                   const tb = contentBlocks[idx] as GuiToolUseBlock | undefined;
                   if (!tb) continue;
-                  const contentStr =
+                  const normalizedContent =
                     typeof block.content === "string"
                       ? block.content
                       : Array.isArray(block.content)
-                        ? (block.content as Array<{ text?: string }>)
-                            .map((c) => c.text ?? "")
-                            .join("")
+                        ? block.content
                         : "";
                   const result: GuiToolResultPayload = {
                     isError: block.is_error ?? false,
-                    content: contentStr,
+                    content: normalizedContent,
                   };
                   tb.status = block.is_error ? "error" : "completed";
                   tb.result = result;

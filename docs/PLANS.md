@@ -12,42 +12,7 @@
 
 ## Active Plan Entry Points
 
-> 暂无进行中计划。
-
-## Recently Completed
-
-### GUI Only Refactor — Remove TUI Toggle
-
-删除桌面顶部 GUI/TUI 切换，收敛线程交互为 GUI-only，移除 renderer 侧 TUI 分支路由。
-
-- [GUI Only Refactor — Remove TUI Mode Toggle](exec-plans/completed/2026-04-09-gui-only-remove-tui-toggle.md) ✅ Completed
-
-### Web Search Block — 内联折叠 + 错误优雅处理
-
-优化 web search 工具块的 UI，从"卡片式"改为"内联折叠头 + 高度受限展开区"，支持结果列表和错误详情展示。
-
-- [Web Search Block Redesign](exec-plans/completed/2026-04-09-web-search-block-redesign.md) ✅ Completed
-
-### MCP Tool Block — 内联折叠 + 高度受限展开
-
-优化 MCP 工具块的 UI，从"展开后铺满"改为"内联折叠头 + 高度受限滚动展开区"。
-
-- [MCP Tool Block Redesign](exec-plans/completed/2026-04-09-mcp-tool-block-redesign.md) ✅ Completed
-
-### File Operation Block — 深度样式重构
-
-将文件编辑/创建/查看工具展示从 ToolCallCard 卡片升级为 Codex 风格内联文件操作块。
-
-- [File Operation Block Redesign](exec-plans/completed/2026-04-08-file-operation-block-redesign.md) ✅ Completed
-
-### Desktop GUI AI Response Panel（响应交互面板）
-
-目标：为 Refinex-Code Desktop 设计并实现生产级 AI 响应交互面板，覆盖流式 Markdown、工具调用、差异审批、子代理可视化等全部 CLI 输出类型。
-
-- [Phase A — Data Model & Type System](exec-plans/completed/2026-04-08-desktop-gui-response-panel-phase-a-data-model.md) ✅ Completed
-- [Phase B — Message Renderer Components](exec-plans/completed/2026-04-08-desktop-gui-response-panel-phase-b-message-renderer.md) ✅ Completed
-- [Phase C — Tool Components](exec-plans/completed/2026-04-08-desktop-gui-response-panel-phase-c-tool-components.md) ✅ Completed
-- [Phase D — Advanced Features](exec-plans/completed/2026-04-08-desktop-gui-response-panel-phase-d-advanced.md) ✅ Completed
+- No active plans
 
 ## Rules
 

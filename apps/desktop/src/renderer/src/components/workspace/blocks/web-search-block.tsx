@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react";
-import { Search, ChevronRight, AlertCircle, ExternalLink } from "lucide-react";
+import { useMemo } from "react";
+import { AlertCircle, ExternalLink } from "lucide-react";
 import type { GuiToolUseBlock } from "../../../../../shared/contracts";
 import { cn } from "@renderer/lib/cn";
+import { WebSearchStatus } from "./web-search-status";
 
 /** Check if tool is web-search. */
 export function isWebSearchTool(name: string): boolean {
@@ -72,143 +73,65 @@ function extractWebSearchSummary(block: GuiToolUseBlock): SearchSummary {
   return null;
 }
 
-// ─── Web search block (inline + expandable) ───────────────────────────────────
+// ─── Web search block (always-inline) ─────────────────────────────────────────
 
 interface WebSearchBlockProps {
   block: GuiToolUseBlock;
 }
 
 export function WebSearchBlock({ block }: WebSearchBlockProps) {
-  const [expanded, setExpanded] = useState(false);
-
   const query = (block.input?.query as string) || "";
   const summary = useMemo(() => extractWebSearchSummary(block), [block]);
 
-  const hasResult = summary !== null;
   const isError = isSearchError(summary);
   const isSuccess = isSearchResult(summary);
+  const state =
+    block.status === "running"
+      ? "searching"
+      : isError || block.status === "error"
+        ? "error"
+        : "done";
+  const resultCount = isSuccess ? summary.resultCount : 0;
+  const sources = isSuccess ? summary.sources : [];
 
   return (
-    <div className="group">
-      {/* Collapsed header */}
-      <button
-        type="button"
-        onClick={() => hasResult && setExpanded((v) => !v)}
-        className={cn(
-          "flex w-full items-center gap-2 py-1.5 px-1 text-left rounded-md",
-          hasResult &&
-            "hover:bg-[var(--color-hover)] transition-colors cursor-pointer",
-          !hasResult && "cursor-default",
-        )}
-      >
-        {/* Icon */}
-        <Search
-          className={cn(
-            "h-3.5 w-3.5 flex-shrink-0",
-            block.status === "running"
-              ? "text-amber-400 animate-spin"
-              : isError
-                ? "text-red-400"
-                : "text-amber-400",
-          )}
-        />
+    <div>
+      <WebSearchStatus query={query} state={state} resultCount={resultCount} />
 
-        {/* Status & label */}
-        <span className="text-[12.5px] text-[var(--color-muted)]">
-          {block.status === "running"
-            ? "搜索中"
-            : isError
-              ? "搜索失败"
-              : "已搜索"}{" "}
-          <span className="text-[var(--color-foreground)] font-medium">
-            {query || "联网检索"}
-          </span>
-        </span>
+      {/* Success: inline results list (non-card, non-collapsible, only when sources exist) */}
+      {isSuccess && sources.length > 0 && (
+        <div className="ml-5.5 mt-1 flex flex-col gap-1.5">
+          {sources.map((source, i) => (
+            <a
+              key={i}
+              href={source.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(
+                "group/link inline-flex max-w-full items-start gap-2 rounded px-1.5 py-1",
+                "text-[12px] text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 transition-colors",
+              )}
+            >
+              <ExternalLink className="h-3 w-3 flex-shrink-0 mt-0.5 opacity-70" />
+              <span className="truncate">{source.title}</span>
+            </a>
+          ))}
+        </div>
+      )}
 
-        {/* Result count badge */}
-        {isSuccess && summary.resultCount > 0 && (
-          <span className="text-[12px] text-[var(--color-muted)]">
-            ({summary.resultCount} 条结果)
-          </span>
-        )}
-
-        {/* Spacer */}
-        <span className="flex-1" />
-
-        {/* Expand chevron */}
-        {hasResult && (
-          <ChevronRight
-            className={cn(
-              "h-3.5 w-3.5 text-[var(--color-muted)] transition-transform duration-150 flex-shrink-0",
-              "opacity-0 group-hover:opacity-100",
-              expanded && "rotate-90 !opacity-100",
-            )}
-          />
-        )}
-      </button>
-
-      {/* Expanded content */}
-      {expanded && hasResult && (
-        <div className="mt-1 ml-5.5">
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] overflow-hidden">
-            {/* Header */}
-            <div className="px-3 py-1.5 bg-[var(--color-secondary)] border-b border-[var(--color-border)] text-[11px] text-[var(--color-muted)] font-mono">
-              {query || "Web Search"}
+      {/* Error: inline details */}
+      {isError && (
+        <div className="ml-5.5 mt-1 flex items-start gap-2 rounded px-1.5 py-1 text-[12px] text-red-600 dark:text-red-400">
+          <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <div className="font-mono whitespace-pre-wrap break-words">
+              {summary.message}
             </div>
-
-            {/* Scrollable content */}
-            <div className="max-h-[520px] overflow-y-auto">
-              <div className="px-3 py-2">
-                {/* Success: results list */}
-                {isSuccess && (
-                  <div className="flex flex-col gap-2">
-                    {summary.sources.length > 0 ? (
-                      summary.sources.map((source, i) => (
-                        <a
-                          key={i}
-                          href={source.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={cn(
-                            "group/link flex items-start gap-2 p-2 rounded border border-amber-500/20",
-                            "bg-amber-500/5 hover:bg-amber-500/10 transition-colors",
-                            "text-[12px] text-amber-600 dark:text-amber-400",
-                          )}
-                        >
-                          <ExternalLink className="h-3 w-3 flex-shrink-0 mt-0.5 opacity-60" />
-                          <div className="flex-1 min-w-0 truncate">
-                            {source.title}
-                          </div>
-                        </a>
-                      ))
-                    ) : (
-                      <div className="text-[12px] text-[var(--color-muted)] px-2 py-1">
-                        — 无结果 —
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Error: error details */}
-                {isError && (
-                  <div className="rounded border border-red-500/20 bg-red-500/5 p-2">
-                    <div className="flex items-start gap-2">
-                      <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-red-500" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[12px] text-red-600 dark:text-red-400 font-mono whitespace-pre-wrap break-words">
-                          {summary.message}
-                        </div>
-                        {summary.traceid && (
-                          <div className="text-[11px] text-[var(--color-muted)] mt-1 font-mono">
-                            traceid: {summary.traceid}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
+            {summary.traceid && (
+              <div className="mt-0.5 text-[11px] text-[var(--color-muted)] font-mono">
+                traceid: {summary.traceid}
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}

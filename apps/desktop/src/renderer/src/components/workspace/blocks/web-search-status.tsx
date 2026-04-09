@@ -1,4 +1,5 @@
 import { Globe, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
+import { cn } from "@renderer/lib/cn";
 
 type SearchState = "searching" | "done" | "error";
 
@@ -6,55 +7,72 @@ interface WebSearchStatusProps {
   query?: string;
   state: SearchState;
   resultCount?: number;
-  sources?: Array<{ title: string; url: string }>;
 }
 
 export function WebSearchStatus({
   query,
   state,
   resultCount,
-  sources,
 }: WebSearchStatusProps) {
-  return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] overflow-hidden">
-      <div className="flex items-center gap-2.5 px-3.5 py-2.5">
-        <Globe className="h-3.5 w-3.5 text-blue-400" />
-        <span className="flex-1 truncate text-[12.5px] text-[var(--color-foreground)]">
-          {query ? `搜索：${query}` : "联网检索"}
-        </span>
-        {state === "searching" && (
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
-        )}
-        {state === "done" && (
-          <span className="flex items-center gap-1 text-[11.5px] text-green-400">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            {resultCount ?? 0} 条结果
-          </span>
-        )}
-        {state === "error" && (
-          <AlertCircle className="h-3.5 w-3.5 text-red-400" />
-        )}
-      </div>
+  const queryText = query?.trim() || "联网信息";
+  const statusText =
+    state === "searching"
+      ? "正在搜索网页"
+      : state === "done"
+        ? "已搜索网页"
+        : "搜索网页失败";
 
-      {state === "done" && sources && sources.length > 0 && (
-        <div className="border-t border-[var(--color-border)] px-3.5 py-2 flex flex-wrap gap-1.5">
-          {sources.slice(0, 4).map((s, i) => (
-            <a
-              key={i}
-              href={s.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="max-w-[180px] truncate rounded-md bg-blue-500/10 px-2 py-0.5 text-[11px] text-blue-400 hover:bg-blue-500/20 transition-colors"
-            >
-              {s.title}
-            </a>
-          ))}
-          {sources.length > 4 && (
-            <span className="text-[11px] text-[var(--color-muted)]">
-              +{sources.length - 4} 更多
-            </span>
-          )}
-        </div>
+  return (
+    <div className="flex items-center gap-2 py-1.5 px-1 text-[12.5px] overflow-hidden">
+      <Globe
+        className={cn(
+          "h-3.5 w-3.5 flex-shrink-0",
+          state === "searching"
+            ? "text-amber-400"
+            : state === "done"
+              ? "text-emerald-500"
+              : "text-red-500",
+        )}
+      />
+
+      <span className="flex-shrink-0 whitespace-nowrap text-[var(--color-muted)]">
+        {statusText}
+      </span>
+
+      <span
+        data-testid="web-search-query"
+        className={cn(
+          "flex-1 min-w-0 truncate font-medium text-[var(--color-foreground)]",
+          state === "searching" && "animate-pulse",
+        )}
+      >
+        {queryText}
+      </span>
+
+      {state === "searching" && (
+        <span
+          aria-hidden="true"
+          className="flex-shrink-0 inline-flex text-[var(--color-muted)] tracking-[0.08em]"
+        >
+          <span className="animate-pulse [animation-delay:0ms]">.</span>
+          <span className="animate-pulse [animation-delay:160ms]">.</span>
+          <span className="animate-pulse [animation-delay:320ms]">.</span>
+        </span>
+      )}
+
+      {state === "searching" && (
+        <Loader2 className="flex-shrink-0 h-3.5 w-3.5 animate-spin text-amber-400" />
+      )}
+
+      {state === "done" && (
+        <span className="flex-shrink-0 whitespace-nowrap inline-flex items-center gap-1 text-[12px] text-[var(--color-muted)]">
+          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+          {resultCount ?? 0} 条结果
+        </span>
+      )}
+
+      {state === "error" && (
+        <AlertCircle className="flex-shrink-0 h-3.5 w-3.5 text-red-500" />
       )}
     </div>
   );
