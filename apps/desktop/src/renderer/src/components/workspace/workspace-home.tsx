@@ -9,11 +9,9 @@ import type {
   GuiBlockDelta,
 } from "../../../../shared/contracts";
 import { ChevronDown } from "lucide-react";
-import { TerminalPanel } from "@renderer/components/terminal/terminal-panel";
 import { WorkspaceComposer } from "@renderer/components/workspace/workspace-composer";
 import { WorkspaceConversation } from "@renderer/components/workspace/workspace-conversation";
 import { WorkspaceEmptyState } from "@renderer/components/workspace/workspace-empty-state";
-import { resolveThreadConversationMode, useUIStore } from "@renderer/stores/ui";
 import { getErrorMessage } from "@renderer/lib/errors";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -33,23 +31,16 @@ export function WorkspaceHome({
   onOpenWorkspace,
   onSelectWorktree,
 }: WorkspaceHomeProps) {
-  const threadConversationModes = useUIStore(
-    (state) => state.threadConversationModes,
-  );
   const [guiConversation, setGuiConversation] =
     useState<DesktopGuiConversationSnapshot | null>(null);
   const [guiConversationLoading, setGuiConversationLoading] = useState(false);
   const [guiConversationSending, setGuiConversationSending] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const threadSurfaceRef = useRef<HTMLDivElement | null>(null);
-  const activeConversationMode = resolveThreadConversationMode(
-    threadConversationModes,
-    activeSession?.id ?? null,
-  );
   const showThreadSurface = activeWorktree !== null && activeSession !== null;
 
   useEffect(() => {
-    if (activeConversationMode !== "gui" || !activeSession?.id) {
+    if (!activeSession?.id) {
       setGuiConversation(null);
       setGuiConversationLoading(false);
       return;
@@ -80,11 +71,11 @@ export function WorkspaceHome({
     return () => {
       cancelled = true;
     };
-  }, [activeConversationMode, activeSession?.id]);
+  }, [activeSession?.id]);
 
   useEffect(() => {
     const surface = threadSurfaceRef.current;
-    if (!surface || activeConversationMode !== "gui" || !showThreadSurface) {
+    if (!surface || !showThreadSurface) {
       setShowScrollToBottom(false);
       return;
     }
@@ -100,7 +91,7 @@ export function WorkspaceHome({
     return () => {
       surface.removeEventListener("scroll", updateScrollState);
     };
-  }, [activeConversationMode, showThreadSurface, guiConversation?.updatedAt]);
+  }, [showThreadSurface, guiConversation?.updatedAt]);
 
   // Subscribe to streaming block deltas from the main process.
   // The delta contains the GUI sessionId, so we scope updates to the active session.
@@ -237,19 +228,8 @@ export function WorkspaceHome({
               className="flex min-h-0 w-full flex-1 overflow-y-auto pb-4 pt-4"
               data-thread-surface="content"
             >
-              {activeConversationMode === "tui" ? (
-                <div className="mx-auto flex min-h-0 w-full max-w-[920px] flex-1">
-                  <TerminalPanel
-                    sessionId={`thread-tui:${activeSession.id}`}
-                    cwd={activeWorktree.worktreePath}
-                    profile="thread-tui"
-                    chrome="embedded"
-                    persistOnUnmount
-                    showCloseButton={false}
-                  />
-                </div>
-              ) : !guiConversationLoading &&
-                (!guiConversation || guiConversation.messages.length === 0) ? (
+              {!guiConversationLoading &&
+              (!guiConversation || guiConversation.messages.length === 0) ? (
                 <WorkspaceEmptyState
                   activeWorktree={activeWorktree}
                   worktrees={worktrees}
@@ -274,9 +254,7 @@ export function WorkspaceHome({
         )}
 
         <div className="w-full">
-          {showThreadSurface &&
-          activeConversationMode === "gui" &&
-          showScrollToBottom ? (
+          {showThreadSurface && showScrollToBottom ? (
             <div className="pointer-events-none flex w-full justify-center pb-2">
               <button
                 type="button"
@@ -293,7 +271,6 @@ export function WorkspaceHome({
             activeSessionTitle={activeSession?.title ?? null}
             activeSessionId={activeSession?.id ?? null}
             activeWorktreePath={activeWorktree?.worktreePath ?? null}
-            conversationMode={activeConversationMode}
             guiConversationSending={guiConversationSending}
             hasActiveSession={activeSession !== null}
             hasWorktree={activeWorktree !== null}

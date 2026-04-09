@@ -16,6 +16,12 @@
 
 ## Recently Completed
 
+### GUI Only Refactor — Remove TUI Toggle
+
+删除桌面顶部 GUI/TUI 切换，收敛线程交互为 GUI-only，移除 renderer 侧 TUI 分支路由。
+
+- [GUI Only Refactor — Remove TUI Mode Toggle](exec-plans/completed/2026-04-09-gui-only-remove-tui-toggle.md) ✅ Completed
+
 ### Web Search Block — 内联折叠 + 错误优雅处理
 
 优化 web search 工具块的 UI，从"卡片式"改为"内联折叠头 + 高度受限展开区"，支持结果列表和错误详情展示。

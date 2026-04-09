@@ -26,7 +26,6 @@ import { Button } from "@renderer/components/ui/button";
 import { Kbd } from "@renderer/components/ui/kbd";
 import { Tooltip } from "@renderer/components/ui/tooltip";
 import { WorkspaceHome } from "@renderer/components/workspace/workspace-home";
-import { ThreadModeToggle } from "@renderer/components/workspace/thread-mode-toggle";
 import { useDesktopShell } from "@renderer/hooks/use-desktop-shell";
 import { useKeyboardShortcuts } from "@renderer/hooks/use-keyboard-shortcuts";
 import { getErrorMessage } from "@renderer/lib/errors";
@@ -203,18 +202,6 @@ export function Layout() {
         >
           <div className="min-w-0 flex-1" data-window-drag-region />
 
-          {!isSettingsView && !isSkillsView ? (
-            <div
-              className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center px-24"
-              data-window-drag-region
-            >
-              <ThreadModeToggle
-                sessionId={activeSession?.id ?? null}
-                className="pointer-events-auto"
-              />
-            </div>
-          ) : null}
-
           {isSettingsView ? null : (
             <div className="flex items-center gap-2" data-no-drag>
               <Tooltip
@@ -230,7 +217,9 @@ export function Layout() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+                  aria-label={
+                    sidebarOpen ? "Collapse sidebar" : "Expand sidebar"
+                  }
                   onClick={toggleSidebar}
                   title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
                   className="h-8 w-8 rounded-lg bg-transparent hover:bg-[var(--color-surface)]/72 hover:backdrop-blur-md focus-visible:bg-[var(--color-surface)]/72 focus-visible:backdrop-blur-md active:bg-[var(--color-surface-strong)]"
@@ -314,7 +303,11 @@ export function Layout() {
           )}
         </header>
 
-        <main className={isSettingsView ? "min-h-0 flex-1" : "min-h-0 flex-1 px-4 pb-4"}>
+        <main
+          className={
+            isSettingsView ? "min-h-0 flex-1" : "min-h-0 flex-1 px-4 pb-4"
+          }
+        >
           {isSettingsView ? (
             settingsSection === "appearance" ? (
               <AppearanceSettingsPanel />

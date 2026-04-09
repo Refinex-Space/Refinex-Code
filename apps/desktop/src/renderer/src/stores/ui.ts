@@ -44,7 +44,6 @@ export type {
 export type ShellView = "workspace" | "skills" | "settings";
 export type SettingsSection = "appearance" | "provider" | "mcp";
 export type SkillsContentMode = "preview" | "source";
-export type ThreadConversationMode = "gui" | "tui";
 
 export const DEFAULT_SIDEBAR_WIDTH = 258;
 export const MIN_SIDEBAR_WIDTH = 220;
@@ -89,7 +88,6 @@ export const defaultUIState = {
   selectedSkillId: null as string | null,
   selectedSkillNodeId: null as string | null,
   skillsContentMode: "preview" as SkillsContentMode,
-  threadConversationModes: {} as Record<string, ThreadConversationMode>,
   composerControlsHydrated: false,
   composerProviderId: "anthropic" as DesktopProviderId,
   composerModel: DEFAULT_CLAUDE_MODEL,
@@ -113,7 +111,6 @@ interface UIState {
   selectedSkillId: string | null;
   selectedSkillNodeId: string | null;
   skillsContentMode: SkillsContentMode;
-  threadConversationModes: Record<string, ThreadConversationMode>;
   composerControlsHydrated: boolean;
   composerProviderId: DesktopProviderId;
   composerModel: string;
@@ -130,10 +127,6 @@ interface UIState {
   setSettingsSection: (section: SettingsSection) => void;
   selectSkillItem: (skillId: string | null, nodeId?: string | null) => void;
   setSkillsContentMode: (mode: SkillsContentMode) => void;
-  setThreadConversationMode: (
-    sessionId: string,
-    mode: ThreadConversationMode,
-  ) => void;
   hydrateComposerControls: (selection: {
     providerId: DesktopProviderId;
     model: string;
@@ -204,14 +197,6 @@ export const useUIStore = create<UIState>((set) => ({
   },
   setSkillsContentMode: (skillsContentMode) => {
     set({ skillsContentMode });
-  },
-  setThreadConversationMode: (sessionId, mode) => {
-    set((state) => ({
-      threadConversationModes: {
-        ...state.threadConversationModes,
-        [sessionId]: mode,
-      },
-    }));
   },
   hydrateComposerControls: ({ providerId, model, effort }) => {
     set({
@@ -308,14 +293,3 @@ export const useUIStore = create<UIState>((set) => ({
     set(defaultUIState);
   },
 }));
-
-export function resolveThreadConversationMode(
-  threadConversationModes: Record<string, ThreadConversationMode>,
-  sessionId: string | null,
-) {
-  if (!sessionId) {
-    return "gui";
-  }
-
-  return threadConversationModes[sessionId] ?? "gui";
-}

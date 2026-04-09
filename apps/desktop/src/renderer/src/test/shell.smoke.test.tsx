@@ -268,12 +268,6 @@ describe("desktop shell", () => {
       screen.getByRole("button", { name: "搜索会话" }),
     ).toBeInTheDocument();
     expect(
-      within(header).getByRole("tablist", { name: "线程交互模式" }),
-    ).toBeInTheDocument();
-    expect(
-      within(header).getByRole("tab", { name: "切换到 GUI 模式" }),
-    ).toHaveAttribute("aria-selected", "true");
-    expect(
       document.querySelector('[data-thread-surface="content"]'),
     ).toHaveClass("w-full", "overflow-y-auto");
     expect(
@@ -363,7 +357,7 @@ describe("desktop shell", () => {
     });
   });
 
-  it("switches between GUI and TUI modes and routes composer input into the correct backend", async () => {
+  it("routes composer input through GUI backend", async () => {
     vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue({
       ...emptySidebarState,
       storageRoot:
@@ -461,9 +455,6 @@ describe("desktop shell", () => {
 
     expect(await screen.findByText("开始构建")).toBeInTheDocument();
     expect(screen.queryByText("开始一段 GUI 对话")).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("tab", { name: "切换到 GUI 模式" }),
-    ).toHaveAttribute("aria-selected", "true");
 
     await waitFor(() => {
       expect(window.desktopApp.getGuiConversation).toHaveBeenCalledWith(
@@ -549,38 +540,9 @@ describe("desktop shell", () => {
 
     expect(window.desktopApp.createTerminalSession).not.toHaveBeenCalled();
     expect(window.desktopApp.writeTerminal).not.toHaveBeenCalled();
-
-    vi.mocked(window.desktopApp.createTerminalSession).mockClear();
-    vi.mocked(window.desktopApp.writeTerminal).mockClear();
-    vi.mocked(window.desktopApp.getGuiConversation).mockClear();
-    vi.mocked(window.desktopApp.sendGuiConversationMessage).mockClear();
-
-    fireEvent.click(screen.getByRole("tab", { name: "切换到 TUI 模式" }));
-    expect(
-      screen.getByRole("tab", { name: "切换到 TUI 模式" }),
-    ).toHaveAttribute("aria-selected", "true");
-
-    fireEvent.change(screen.getByLabelText("新线程"), {
-      target: {
-        value: "请总结 README 的核心目标",
-      },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "发送到当前线程 TUI" }));
-
-    await waitFor(() => {
-      expect(window.desktopApp.createTerminalSession).toHaveBeenCalledWith({
-        sessionId: "thread-tui:thread-2",
-        cwd: "/Users/test/projects/alpha",
-        profile: "thread-tui",
-      });
-      expect(window.desktopApp.writeTerminal).toHaveBeenCalledWith(
-        "thread-tui:thread-2",
-        "请总结 README 的核心目标\r",
-      );
-    });
   });
 
-  it("shows code review slash suggestions above skills and routes /review input into thread tui", async () => {
+  it("shows code review slash suggestions above skills and routes /review input into GUI backend", async () => {
     vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue({
       ...emptySidebarState,
       storageRoot:
@@ -677,7 +639,7 @@ describe("desktop shell", () => {
     render(<App />);
 
     const composer = await screen.findByLabelText("新线程");
-    vi.mocked(window.desktopApp.writeTerminal).mockClear();
+    vi.mocked(window.desktopApp.sendGuiConversationMessage).mockClear();
     fireEvent.change(composer, {
       target: {
         value: "/",
@@ -736,18 +698,23 @@ describe("desktop shell", () => {
         value: "42",
       },
     });
-    fireEvent.click(screen.getByRole("tab", { name: "切换到 TUI 模式" }));
-    fireEvent.click(screen.getByRole("button", { name: "发送到当前线程 TUI" }));
+    fireEvent.click(screen.getByRole("button", { name: "发送到 GUI 模式" }));
 
     await waitFor(() => {
-      expect(window.desktopApp.writeTerminal).toHaveBeenCalledWith(
-        "thread-tui:thread-2",
-        "/review 42\r",
+      expect(window.desktopApp.sendGuiConversationMessage).toHaveBeenCalledWith(
+        {
+          sessionId: "thread-2",
+          worktreePath: "/Users/test/projects/alpha",
+          prompt: "/review 42",
+          providerId: "anthropic",
+          model: "claude-sonnet-4-6",
+          effort: "high",
+        },
       );
     });
   });
 
-  it("supports /init as a built-in prompt command and routes it into thread tui", async () => {
+  it("supports /init as a built-in prompt command and routes it into GUI backend", async () => {
     vi.mocked(window.desktopApp.getSidebarState).mockResolvedValue({
       ...emptySidebarState,
       storageRoot:
@@ -794,7 +761,7 @@ describe("desktop shell", () => {
     render(<App />);
 
     const composer = await screen.findByLabelText("新线程");
-    vi.mocked(window.desktopApp.writeTerminal).mockClear();
+    vi.mocked(window.desktopApp.sendGuiConversationMessage).mockClear();
     fireEvent.change(composer, {
       target: {
         value: "/ini",
@@ -828,13 +795,18 @@ describe("desktop shell", () => {
       "直接发送，开始扫描代码库并初始化 AGENTS / skills / hooks",
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: "切换到 TUI 模式" }));
-    fireEvent.click(screen.getByRole("button", { name: "发送到当前线程 TUI" }));
+    fireEvent.click(screen.getByRole("button", { name: "发送到 GUI 模式" }));
 
     await waitFor(() => {
-      expect(window.desktopApp.writeTerminal).toHaveBeenCalledWith(
-        "thread-tui:thread-2",
-        "/init\r",
+      expect(window.desktopApp.sendGuiConversationMessage).toHaveBeenCalledWith(
+        {
+          sessionId: "thread-2",
+          worktreePath: "/Users/test/projects/alpha",
+          prompt: "/init",
+          providerId: "anthropic",
+          model: "claude-sonnet-4-6",
+          effort: "high",
+        },
       );
     });
   });
@@ -1003,13 +975,18 @@ describe("desktop shell", () => {
         value: "帮我写一段发布说明",
       },
     });
-    fireEvent.click(screen.getByRole("tab", { name: "切换到 TUI 模式" }));
-    fireEvent.click(screen.getByRole("button", { name: "发送到当前线程 TUI" }));
+    fireEvent.click(screen.getByRole("button", { name: "发送到 GUI 模式" }));
 
     await waitFor(() => {
-      expect(window.desktopApp.writeTerminal).toHaveBeenCalledWith(
-        "thread-tui:thread-2",
-        "/tech-writing /harness-feat 帮我写一段发布说明\r",
+      expect(window.desktopApp.sendGuiConversationMessage).toHaveBeenCalledWith(
+        {
+          sessionId: "thread-2",
+          worktreePath: "/Users/test/projects/alpha",
+          prompt: "/tech-writing /harness-feat 帮我写一段发布说明",
+          providerId: "anthropic",
+          model: "claude-sonnet-4-6",
+          effort: "high",
+        },
       );
     });
   });

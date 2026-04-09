@@ -26,7 +26,7 @@ import { useVoiceDictation } from "@renderer/hooks/use-voice-dictation";
 import { Tooltip } from "@renderer/components/ui/tooltip";
 import { cn } from "@renderer/lib/cn";
 import { getErrorMessage } from "@renderer/lib/errors";
-import { type ThreadConversationMode, useUIStore } from "@renderer/stores/ui";
+import { useUIStore } from "@renderer/stores/ui";
 import type {
   AppInfo,
   SkillRecord,
@@ -76,7 +76,6 @@ interface WorkspaceComposerProps {
   activeSessionTitle: string | null;
   activeSessionId: string | null;
   activeWorktreePath: string | null;
-  conversationMode: ThreadConversationMode;
   guiConversationSending?: boolean;
   hasActiveSession: boolean;
   hasWorktree: boolean;
@@ -553,7 +552,6 @@ function buildSlashPreviewCardData(params: {
   modelLabel: string;
   activeSessionTitle: string | null;
   activeWorktreePath: string | null;
-  conversationMode: ThreadConversationMode;
   skillSnapshot: SkillSnapshot | null;
 }): SlashPreviewCardData {
   const {
@@ -563,7 +561,6 @@ function buildSlashPreviewCardData(params: {
     modelLabel,
     activeSessionTitle,
     activeWorktreePath,
-    conversationMode,
     skillSnapshot,
   } = params;
   const projectLabel = getPathTailSegment(activeWorktreePath);
@@ -609,7 +606,7 @@ function buildSlashPreviewCardData(params: {
         rows: [
           {
             label: "交互模式",
-            value: conversationMode.toUpperCase(),
+            value: "GUI",
           },
           {
             label: "活跃线程",
@@ -703,7 +700,6 @@ export function WorkspaceComposer({
   activeSessionTitle,
   activeSessionId,
   activeWorktreePath,
-  conversationMode,
   guiConversationSending = false,
   hasActiveSession,
   hasWorktree,
@@ -895,7 +891,6 @@ export function WorkspaceComposer({
             modelLabel: modelButtonLabel,
             activeSessionTitle,
             activeWorktreePath,
-            conversationMode,
             skillSnapshot,
           })
         : null,
@@ -904,7 +899,6 @@ export function WorkspaceComposer({
       activeWorktreePath,
       appInfo,
       composerProviderId,
-      conversationMode,
       modelButtonLabel,
       selectedStatusPreview,
       skillSnapshot,
@@ -934,51 +928,26 @@ export function WorkspaceComposer({
       return;
     }
 
-    if (conversationMode === "gui") {
-      if (!onSendGuiMessage) {
-        toast.error("GUI 对话桥接未就绪。");
-        return;
-      }
-
-      const submittedValue = composerValue;
-      applyValue("");
-
-      try {
-        await onSendGuiMessage({
-          prompt: submittedValue,
-          providerId: composerProviderId,
-          model: composerModel,
-          effort: composerEffort,
-        });
-        setSelectedStatusPreview(null);
-        setSelectedSlashCommand(null);
-        setSelectedSkillPills([]);
-      } catch (error) {
-        applyValue(submittedValue);
-        toast.error(getErrorMessage(error));
-      }
+    if (!onSendGuiMessage || !activeSessionId) {
+      toast.error("GUI 对话桥接未就绪。");
       return;
     }
 
-    if (!activeSessionId) {
-      return;
-    }
-
-    const terminalSessionId = `thread-tui:${activeSessionId}`;
-    const normalizedInput = `${composerValue.replace(/\r?\n/g, "\r")}\r`;
+    const submittedValue = composerValue;
+    applyValue("");
 
     try {
-      await window.desktopApp.createTerminalSession({
-        sessionId: terminalSessionId,
-        cwd: activeWorktreePath ?? undefined,
-        profile: "thread-tui",
+      await onSendGuiMessage({
+        prompt: submittedValue,
+        providerId: composerProviderId,
+        model: composerModel,
+        effort: composerEffort,
       });
-      await window.desktopApp.writeTerminal(terminalSessionId, normalizedInput);
       setSelectedStatusPreview(null);
       setSelectedSlashCommand(null);
       setSelectedSkillPills([]);
-      applyValue("");
     } catch (error) {
+      applyValue(submittedValue);
       toast.error(getErrorMessage(error));
     }
   };
@@ -1536,11 +1505,9 @@ export function WorkspaceComposer({
               content={
                 !canSend
                   ? "输入内容并选择线程后可发送"
-                  : conversationMode === "gui"
-                    ? guiConversationSending
-                      ? "正在等待 GUI 响应"
-                      : "发送到当前线程 GUI"
-                    : "发送到当前线程 TUI"
+                  : guiConversationSending
+                    ? "正在等待 GUI 响应"
+                    : "发送到当前线程 GUI"
               }
             >
               <button
@@ -1556,11 +1523,9 @@ export function WorkspaceComposer({
                 aria-label={
                   !canSend
                     ? "发送消息不可用"
-                    : conversationMode === "gui"
-                      ? guiConversationSending
-                        ? "GUI 正在响应"
-                        : "发送到 GUI 模式"
-                      : "发送到当前线程 TUI"
+                    : guiConversationSending
+                      ? "GUI 正在响应"
+                      : "发送到 GUI 模式"
                 }
               >
                 <ArrowUp className="h-4 w-4" aria-hidden="true" />
